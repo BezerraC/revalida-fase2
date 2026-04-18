@@ -1,0 +1,110 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
+import axios from "axios";
+import { Stethoscope, Activity, ArrowRight, History } from "lucide-react";
+
+interface CaseModel {
+  _id: string;
+  title: string;
+  category: string;
+  description: string;
+}
+
+export default function Home() {
+  const [cases, setCases] = useState<CaseModel[]>([]);
+  const [loading, setLoading] = useState(true);
+  const router = useRouter();
+
+  useEffect(() => {
+    axios.get("http://localhost:8000/cases")
+      .then((res) => {
+        setCases(res.data);
+        setLoading(false);
+      })
+      .catch((err) => {
+        console.error("Error fetching cases", err);
+        setLoading(false);
+      });
+  }, []);
+
+  const handleStart = async (caseId: string) => {
+    try {
+      const res = await axios.post("http://localhost:8000/sessions", { case_id: caseId });
+      router.push(`/simulacao/${res.data.session_id}`);
+    } catch (error) {
+      console.error("Failed to start session", error);
+      alert("Erro ao iniciar sessão do caso.");
+    }
+  };
+
+  return (
+    <div className="min-h-screen bg-slate-50 p-8 font-sans">
+      <div className="max-w-4xl mx-auto">
+        <header className="mb-12 text-center">
+          <div className="flex justify-center items-center mb-4">
+            <div className="bg-blue-600 p-3 rounded-2xl shadow-lg shadow-blue-200">
+              <Stethoscope className="w-10 h-10 text-white" />
+            </div>
+          </div>
+          <h1 className="text-4xl font-extrabold text-slate-800 tracking-tight">Revalida AI Pro</h1>
+          <p className="text-slate-500 mt-3 text-lg font-medium">Treinamento Interativo de Habilidades Clínicas</p>
+          
+          <div className="flex justify-center mt-6">
+            <button 
+               onClick={() => router.push("/historico")}
+               className="flex items-center gap-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium px-6 py-2.5 rounded-full transition-colors"
+            >
+               <History className="w-4 h-4" />
+               Meu Histórico de Consultas
+            </button>
+          </div>
+        </header>
+
+        {loading ? (
+          <div className="flex justify-center py-20">
+            <Activity className="w-10 h-10 text-blue-500 animate-pulse" />
+          </div>
+        ) : cases.length === 0 ? (
+          <div className="text-center py-12 text-slate-500 bg-white rounded-xl shadow-sm border border-dashed border-slate-300">
+            <p>Nenhum caso clínico encontrado no banco de dados.</p>
+            <p className="text-sm mt-2">Certifique-se de iniciar o backend e conectar ao MongoDB.</p>
+          </div>
+        ) : (
+          <div className="space-y-12">
+            {Object.entries(
+              cases.reduce((acc, c) => {
+                const cat = c.category || "Geral";
+                if (!acc[cat]) acc[cat] = [];
+                acc[cat].push(c);
+                return acc;
+              }, {} as Record<string, CaseModel[]>)
+            ).map(([category, catCases]) => (
+              <div key={category}>
+                <h2 className="text-2xl font-bold text-slate-800 mb-6 border-b border-slate-200 pb-2">{category}</h2>
+                <div className="grid gap-6 md:grid-cols-2">
+                  {catCases.map((c) => (
+                    <div key={c._id} className="bg-white rounded-2xl p-6 shadow-sm border border-slate-100 hover:shadow-md transition-all group flex flex-col justify-between">
+                      <div>
+                          <h3 className="text-xl font-bold text-slate-800 mb-2">{c.title}</h3>
+                          <p className="text-slate-600 text-sm leading-relaxed mb-6">{c.description}</p>
+                      </div>
+                      <button 
+                        onClick={() => handleStart(c._id)}
+                        className="w-full flex items-center justify-center gap-2 bg-blue-50 text-blue-700 font-semibold py-3 px-4 rounded-xl hover:bg-blue-600 hover:text-white transition-colors duration-300"
+                      >
+                        Iniciar Consulta
+                        <ArrowRight className="w-4 h-4 opacity-70 group-hover:opacity-100 group-hover:translate-x-1 transition-all" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
