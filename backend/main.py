@@ -1,7 +1,7 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 import database
-from models import CaseModel, ChatSessionModel, ChatRequest, ChatTurn
+from models import CaseModel, ChatSessionModel, ChatRequest, ChatTurn, Fase1Request, Fase1ChatRequest
 from bson import ObjectId
 import gemini_service
 import os
@@ -133,6 +133,64 @@ async def get_feedback(session_id: str):
     
     return {"feedback": feedback_text}
 
+
+@app.post("/fase1/sessions")
+async def create_fase1_session():
+    session = {
+        "history": [],
+        "document": ""
+    }
+    result = await database.db.fase1_sessions.insert_one(session)
+    return {"session_id": str(result.inserted_id)}
+
+@app.get("/fase1/sessions/{session_id}")
+async def get_fase1_session(session_id: str):
+    session = await database.db.fase1_sessions.find_one({"_id": ObjectId(session_id)})
+    if not session:
+        raise HTTPException(status_code=404, detail="Sessão não encontrada")
+    session["_id"] = str(session["_id"])
+    return session
+
+@app.post("/fase1/chat")
+async def fase1_chat(request: Fase1ChatRequest):
+    session = await database.db.fase1_sessions.find_one({"_id": ObjectId(request.session_id)})
+    if not session:
+        raise HTTPException(status_code=404, detail="Sessão não encontrada")
+        
+    user_text = request.message.text
+    history_turns = session.get("history", [])
+    
+    # Store user turn
+    history_turns.append({"role": "user", "text": user_text})
+    
+    try:
+        reply_data = await gemini_service.generate_fase1_chat(user_text, history_turns)
+    except Exception as e:
+        if "429" in str(e) or "quota" in str(e).lower() or "limite" in str(e).lower():
+            raise HTTPException(status_code=429, detail="O tutor está sobrecarregado (Limite Gratuito do Servidor). Por favor, aguarde 1 minuto e tente mandar a mensagem de novo.")
+        raise HTTPException(status_code=500, detail=str(e))
+        
+    ai_reply = reply_data.get("reply", "")
+    new_doc = reply_data.get("document", "")
+    
+    # Store bot turn
+    history_turns.append({"role": "model", "text": ai_reply})
+    
+    update_fields = {"history": history_turns}
+    if new_doc and new_doc.strip() != "":
+        update_fields["document"] = new_doc
+        
+    await database.db.fase1_sessions.update_one(
+        {"_id": ObjectId(request.session_id)},
+        {"$set": update_fields}
+    )
+    
+    return {
+        "reply": ai_reply,
+        "document": new_doc if new_doc and new_doc.strip() != "" else session.get("document", "")
+    }
+
+
 @app.get("/history")
 async def get_history():
     sessions_cursor = database.db.sessions.find({"history.0": {"$exists": True}})
@@ -153,5 +211,31 @@ async def get_history():
         })
         
     # Reverse so the newest ones are first
+    out.reverse()
+    return {"history": out}
+
+@app.get("/fase1/history")
+async def get_fase1_history():
+    sessions_cursor = database.db.fase1_sessions.find({"history.0": {"$exists": True}})
+    
+    out = []
+    async for session in sessions_cursor:
+        doc = session.get("document", "")
+        title = "Tópicos Variados"
+        
+        # Procura o primeiro cabeçalho # para ser o título
+        lines = doc.split("\\n")
+        for line in lines:
+            line = line.strip()
+            if line.startswith("# "):
+                title = line.replace("# ", "").strip()
+                break
+                
+        out.append({
+            "session_id": str(session["_id"]),
+            "title": title,
+            "turns_count": len(session.get("history", []))
+        })
+        
     out.reverse()
     return {"history": out}

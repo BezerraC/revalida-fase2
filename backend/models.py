@@ -25,3 +25,15 @@ class MessageInput(BaseModel):
 class ChatRequest(BaseModel):
     session_id: str
     message: MessageInput
+
+class Fase1Request(BaseModel):
+    query: str
+
+class Fase1SessionModel(BaseModel):
+    id: Optional[str] = Field(alias="_id", default=None)
+    history: List[ChatTurn]
+    document: str
+
+class Fase1ChatRequest(BaseModel):
+    session_id: str
+    message: MessageInput

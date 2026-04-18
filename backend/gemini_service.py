@@ -1,4 +1,5 @@
 import os
+import json
 import google.generativeai as genai
 from models import ChatTurn, CaseModel
 from typing import List
@@ -70,3 +71,42 @@ async def generate_feedback(case: CaseModel, history: List[ChatTurn]) -> str:
     except Exception as e:
         print(f"Erro no gemini ao gerar feedback: {e}")
         raise e
+
+async def generate_fase1_chat(user_message: str, history: List[ChatTurn]) -> dict:
+    __init_gemini__()
+    model = genai.GenerativeModel(
+        model_name="gemini-2.5-flash",
+        generation_config={"response_mime_type": "application/json"}
+    )
+    
+    prompt = """Você é um Médico Preceptor (Tutor) especialista no Revalida INEP (Brasil).
+Sua função é conversar com o aluno e ajudá-lo a estudar (Fase 1 teórica). O aluno pode perguntar sobre doenças, sintomas ou fazer simulações teóricas.
+
+Responda OBRIGATORIAMENTE em formato JSON válido, contendo exatamente duas chaves:
+1. "reply": A sua resposta de conversação (natural, clara e direta para ser falada em áudio). Se estiver cumprimentando, dê as boas vindas.
+2. "document": Um artigo estruturado em Markdown sobre a principal doença da conversa. Siga sempre o formato prático INEP:
+   # [Nome da Doença]
+   ## 1. Definição e Epidemiologia
+   ## 2. Quadro Clínico (cite 'pegadinhas' clássicas)
+   ## 3. Diagnóstico (compare UBS/UPA vs Padrão Ouro)
+   ## 4. Tratamento e Conduta
+   Se não for uma doença específica ou não se aplicar, deixe o campo "document" vazio (""). SEMPRE preencha esse campo com o texto markdown se houver uma doença ou tema sendo discutido, em vez de deixar pro usuário pedir de novo.
+
+Aqui está o histórico recente da conversa:
+"""
+    for turn in history[-4:]:
+        prompt += f"\n[{turn.get('role', 'user')}] {turn.get('text', '')}"
+        
+    prompt += f"\n\n[user] {user_message}"
+
+    try:
+        response = await model.generate_content_async(prompt)
+        text = response.text.strip()
+        
+        parsed = json.loads(text)
+        return parsed
+    except Exception as e:
+        print(f"Erro no gemini ao gerar fase 1: {e}")
+        if "429" in str(e) or "quota" in str(e).lower():
+            raise Exception("Limite de requisições gratuitas atingido. Aguarde 1 minuto.")
+        raise Exception("Erro ao processar as informações do Tutor.")
