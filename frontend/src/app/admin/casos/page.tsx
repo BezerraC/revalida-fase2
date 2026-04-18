@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, Suspense } from "react";
+import { useSearchParams } from "next/navigation";
 import { 
   BookOpen, 
   Plus, 
@@ -28,7 +29,7 @@ interface Case {
   checklist: string[];
 }
 
-export default function CasesAdminPage() {
+function CasesContent() {
   const [cases, setCases] = useState<Case[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
@@ -38,9 +39,17 @@ export default function CasesAdminPage() {
   const [currentCase, setCurrentCase] = useState<Partial<Case> | null>(null);
   const [isSaving, setIsSaving] = useState(false);
 
+  const searchParams = useSearchParams();
+
   useEffect(() => {
     fetchCases();
   }, []);
+
+  useEffect(() => {
+    if (searchParams.get("new") === "true") {
+      handleOpenCreate();
+    }
+  }, [searchParams]);
 
   async function fetchCases() {
     setLoading(true);
@@ -364,5 +373,13 @@ export default function CasesAdminPage() {
         </div>
       )}
     </div>
+  );
+}
+
+export default function CasesAdminPage() {
+  return (
+    <Suspense fallback={<div>Carregando...</div>}>
+      <CasesContent />
+    </Suspense>
   );
 }

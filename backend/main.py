@@ -142,7 +142,13 @@ async def create_session(req: CreateSessionRequest, current_user: dict = Depends
 @app.get("/sessions/{session_id}")
 async def get_session(session_id: str, current_user: dict = Depends(get_current_user)):
     user_id = str(current_user["_id"])
-    session = await database.db.sessions.find_one({"_id": ObjectId(session_id), "user_id": user_id})
+    query = {"_id": ObjectId(session_id)}
+    
+    # Se não for admin, só pode ver a própria sessão
+    if current_user.get("role") != "admin":
+        query["user_id"] = user_id
+        
+    session = await database.db.sessions.find_one(query)
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
     session["_id"] = str(session["_id"])
@@ -153,6 +159,30 @@ async def get_session(session_id: str, current_user: dict = Depends(get_current_
         session["case_data"] = case
         
     return session
+
+@app.get("/admin/sessions")
+async def get_all_sessions(admin: dict = Depends(get_current_admin)):
+    sessions_cursor = database.db.sessions.find({})
+    sessions = []
+    async for sess in sessions_cursor:
+        sess["_id"] = str(sess["_id"])
+        
+        # Buscar nome do usuário
+        user = await database.db.users.find_one({"_id": ObjectId(sess["user_id"])})
+        sess["user_name"] = user["full_name"] if user else "Usuário Removido"
+        sess["user_email"] = user["email"] if user else "N/A"
+        
+        # Buscar título do caso
+        case = await database.db.cases.find_one({"_id": ObjectId(sess["case_id"])})
+        sess["case_title"] = case["title"] if case else "Cenário Removido"
+        
+        # Adicionar contagem de turnos
+        sess["turns_count"] = len(sess.get("history", []))
+        
+        sessions.append(sess)
+        
+    sessions.reverse() # Mais recentes primeiro
+    return sessions
 
 @app.post("/chat")
 async def chat_interaction(request: ChatRequest, current_user: dict = Depends(get_current_user)):

@@ -44,6 +44,7 @@ export default function AdminLayout({
     { label: "Dashboard", icon: LayoutDashboard, href: "/admin" },
     { label: "Usuários", icon: Users, href: "/admin/usuarios" },
     { label: "Cenários Clínicos", icon: BookOpen, href: "/admin/casos" },
+    { label: "Auditoria", icon: Activity, href: "/admin/auditoria" },
   ];
 
   return (

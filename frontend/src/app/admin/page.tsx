@@ -12,6 +12,7 @@ import {
   BrainCircuit
 } from "lucide-react";
 import api from "@/lib/api";
+import Link from "next/link";
 
 interface Stats {
   total_users: number;
@@ -117,13 +118,19 @@ export default function AdminDashboard() {
               Como administrador, você pode criar novos cenários clínicos personalizados, calibrar os prompts de sistema dos pacientes e ajustar os checklists de avaliação.
             </p>
             <div className="flex flex-wrap gap-4">
-              <button className="bg-blue-600 hover:bg-blue-500 text-white px-8 py-4 rounded-2xl font-black transition-all flex items-center gap-2 group/btn shadow-lg shadow-blue-900/40">
+              <Link 
+                href="/admin/casos?new=true"
+                className="bg-blue-600 hover:bg-blue-500 text-white px-8 py-4 rounded-2xl font-black transition-all flex items-center gap-2 group/btn shadow-lg shadow-blue-900/40"
+              >
                 Novo Cenário Clínico
                 <ArrowUpRight className="w-5 h-5 group-hover/btn:translate-x-1 group-hover/btn:-translate-y-1 transition-transform" />
-              </button>
-              <button className="bg-slate-800 hover:bg-slate-700 text-white px-8 py-4 rounded-2xl font-black transition-all border border-slate-700">
+              </Link>
+              <Link 
+                href="/admin/auditoria"
+                className="bg-slate-800 hover:bg-slate-700 text-white px-8 py-4 rounded-2xl font-black transition-all border border-slate-700"
+              >
                 Auditar Sessões
-              </button>
+              </Link>
             </div>
           </div>
         </div>
