@@ -6,7 +6,7 @@ from bson import ObjectId
 import gemini_service
 import os
 from pydantic import BaseModel
-from auth_utils import get_current_user
+from auth_utils import get_current_user, get_current_admin
 from auth_handler import get_password_hash, verify_password, create_access_token
 from datetime import datetime
 from typing import Optional
@@ -347,3 +347,71 @@ async def get_fase1_history(current_user: dict = Depends(get_current_user)):
         
     out.reverse()
     return {"history": out}
+
+# ----------------------------------------------------------------
+# ADMIN ENDPOINTS
+# ----------------------------------------------------------------
+
+@app.get("/admin/stats")
+async def get_admin_stats(admin: dict = Depends(get_current_admin)):
+    users_count = await database.db.users.count_documents({})
+    cases_count = await database.db.cases.count_documents({})
+    sessions_fase2 = await database.db.sessions.count_documents({})
+    sessions_fase1 = await database.db.fase1_sessions.count_documents({})
+    
+    return {
+        "total_users": users_count,
+        "total_cases": cases_count,
+        "total_sessions": sessions_fase2 + sessions_fase1,
+        "fase2_sessions": sessions_fase2,
+        "fase1_sessions": sessions_fase1
+    }
+
+@app.get("/admin/users")
+async def get_admin_users(admin: dict = Depends(get_current_admin)):
+    users_cursor = database.db.users.find({})
+    users = []
+    async for user in users_cursor:
+        user["_id"] = str(user["_id"])
+        # Nunca enviar o hash da senha
+        if "hashed_password" in user:
+            del user["hashed_password"]
+        users.append(user)
+    return users
+
+@app.patch("/admin/users/{user_id}/role")
+async def update_user_role(user_id: str, role: str = Body(..., embed=True), admin: dict = Depends(get_current_admin)):
+    if role not in ["admin", "student"]:
+        raise HTTPException(status_code=400, detail="Role inválida")
+        
+    await database.db.users.update_one(
+        {"_id": ObjectId(user_id)},
+        {"$set": {"role": role}}
+    )
+    return {"message": f"Role do usuário atualizada para {role}"}
+
+@app.post("/admin/cases")
+async def create_case(case_data: CaseModel, admin: dict = Depends(get_current_admin)):
+    case_dict = case_data.dict(by_alias=True)
+    if "_id" in case_dict:
+        del case_dict["_id"]
+        
+    result = await database.db.cases.insert_one(case_dict)
+    return {"id": str(result.inserted_id), "message": "Caso criado com sucesso"}
+
+@app.patch("/admin/cases/{case_id}")
+async def update_case(case_id: str, case_data: CaseModel, admin: dict = Depends(get_current_admin)):
+    update_data = case_data.dict(by_alias=True, exclude_unset=True)
+    if "_id" in update_data:
+        del update_data["_id"]
+        
+    await database.db.cases.update_one(
+        {"_id": ObjectId(case_id)},
+        {"$set": update_data}
+    )
+    return {"message": "Caso atualizado com sucesso"}
+
+@app.delete("/admin/cases/{case_id}")
+async def delete_case(case_id: str, admin: dict = Depends(get_current_admin)):
+    await database.db.cases.delete_one({"_id": ObjectId(case_id)})
+    return {"message": "Caso removido com sucesso"}

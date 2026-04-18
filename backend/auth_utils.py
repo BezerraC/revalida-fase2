@@ -24,3 +24,11 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(s
     # Retornamos o usuário como um dicionário, incluindo o ID formatado como string
     user["_id"] = str(user["_id"])
     return user
+
+async def get_current_admin(current_user: dict = Depends(get_current_user)):
+    if current_user.get("role") != "admin":
+        raise HTTPException(
+            status_code=403, 
+            detail="Acesso negado. Apenas administradores podem acessar este recurso."
+        )
+    return current_user
