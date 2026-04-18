@@ -3,7 +3,7 @@
 import { useAuth } from "@/context/AuthContext";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { User, Mail, Shield, Calendar, LogOut, ArrowLeft, Activity, Settings, UserCircle, History, BookOpen, Stethoscope, ArrowRight, Key, ExternalLink, CheckCircle } from "lucide-react";
+import { User, Mail, Shield, Calendar, LogOut, ArrowLeft, Activity, Settings, UserCircle, History, BookOpen, Stethoscope, ArrowRight, Key, ExternalLink, CheckCircle, X, Save } from "lucide-react";
 import Link from "next/link";
 import api from "@/lib/api";
 
@@ -11,13 +11,23 @@ export default function ProfilePage() {
   const { user, logout, loading, refreshUser } = useAuth();
   const router = useRouter();
   
+  // States para API Key
   const [apiKey, setApiKey] = useState("");
-  const [isSaving, setIsSaving] = useState(false);
-  const [saveSuccess, setSaveSuccess] = useState(false);
+  const [isSavingKey, setIsSavingKey] = useState(false);
+  const [saveKeySuccess, setSaveKeySuccess] = useState(false);
+
+  // States para Edição de Perfil
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [editName, setEditName] = useState("");
+  const [editEmail, setEditEmail] = useState("");
+  const [isUpdatingProfile, setIsUpdatingProfile] = useState(false);
+  const [updateError, setUpdateError] = useState("");
 
   useEffect(() => {
-    if (user?.gemini_api_key) {
-      setApiKey(user.gemini_api_key);
+    if (user) {
+      setApiKey(user.gemini_api_key || "");
+      setEditName(user.full_name || "");
+      setEditEmail(user.email || "");
     }
   }, [user]);
 
@@ -35,18 +45,37 @@ export default function ProfilePage() {
   }
 
   const handleSaveApiKey = async () => {
-    setIsSaving(true);
-    setSaveSuccess(false);
+    setIsSavingKey(true);
+    setSaveKeySuccess(false);
     try {
       await api.patch("/auth/profile/api-key", { api_key: apiKey });
       await refreshUser();
-      setSaveSuccess(true);
-      setTimeout(() => setSaveSuccess(false), 3000);
+      setSaveKeySuccess(true);
+      setTimeout(() => setSaveKeySuccess(false), 3000);
     } catch (error) {
       console.error("Erro ao salvar chave:", error);
       alert("Erro ao salvar a chave. Tente novamente.");
     } finally {
-      setIsSaving(false);
+      setIsSavingKey(false);
+    }
+  };
+
+  const handleUpdateProfile = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsUpdatingProfile(true);
+    setUpdateError("");
+    try {
+      await api.patch("/auth/profile", {
+        full_name: editName,
+        email: editEmail
+      });
+      await refreshUser();
+      setIsEditModalOpen(false);
+    } catch (error: any) {
+      console.error("Erro ao atualizar perfil:", error);
+      setUpdateError(error.response?.data?.detail || "Erro ao atualizar perfil. Tente novamente.");
+    } finally {
+      setIsUpdatingProfile(false);
     }
   };
 
@@ -83,8 +112,8 @@ export default function ProfilePage() {
         <div className="bg-white rounded-[2.5rem] shadow-2xl shadow-slate-200 border border-slate-100 overflow-hidden mb-8">
           <div className="h-32 bg-gradient-to-r from-blue-600 to-indigo-700 relative">
              <div className="absolute -bottom-16 left-10 p-2 bg-white rounded-[2rem] shadow-xl">
-                <div className="w-32 h-32 bg-slate-100 rounded-[1.5rem] flex items-center justify-center border-4 border-white overflow-hidden">
-                   <User className="w-16 h-16 text-slate-400" />
+                <div className="w-32 h-32 bg-slate-100 rounded-[1.5rem] flex items-center justify-center border-4 border-white overflow-hidden text-slate-400">
+                   <User className="w-16 h-16" />
                 </div>
              </div>
           </div>
@@ -165,7 +194,7 @@ export default function ProfilePage() {
                       placeholder="Cole sua chave aqui (ex: AIza...)"
                       className="w-full bg-slate-800 border border-slate-700 text-white px-6 py-4 rounded-2xl focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all font-mono text-sm"
                     />
-                    {saveSuccess && (
+                    {saveKeySuccess && (
                       <div className="absolute right-4 top-1/2 -translate-y-1/2 text-emerald-400 animate-in fade-in zoom-in duration-300">
                         <CheckCircle className="w-5 h-5" />
                       </div>
@@ -173,10 +202,10 @@ export default function ProfilePage() {
                   </div>
                   <button 
                     onClick={handleSaveApiKey}
-                    disabled={isSaving}
+                    disabled={isSavingKey}
                     className="bg-blue-600 hover:bg-blue-500 disabled:bg-slate-700 text-white px-8 py-4 rounded-2xl font-black transition-all active:scale-95 shadow-lg shadow-blue-900/20 shrink-0"
                   >
-                    {isSaving ? "Salvando..." : saveSuccess ? "Salvo!" : "Salvar Chave"}
+                    {isSavingKey ? "Salvando..." : saveKeySuccess ? "Salvo!" : "Salvar Chave"}
                   </button>
                 </div>
               </div>
@@ -224,7 +253,10 @@ export default function ProfilePage() {
             </div>
 
             <div className="mt-12 pt-8 border-t border-slate-50 flex flex-wrap gap-4">
-               <button className="flex items-center gap-2 bg-slate-800 hover:bg-slate-900 text-white px-6 py-4 rounded-2xl font-bold transition-all active:scale-95 shadow-lg shadow-slate-200">
+               <button 
+                onClick={() => setIsEditModalOpen(true)}
+                className="flex items-center gap-2 bg-slate-800 hover:bg-slate-900 text-white px-6 py-4 rounded-2xl font-bold transition-all active:scale-95 shadow-lg shadow-slate-200"
+               >
                   <Settings className="w-5 h-5" />
                   Editar Minhas Informações
                </button>
@@ -246,6 +278,85 @@ export default function ProfilePage() {
            </div>
         </div>
       </div>
+
+      {/* Modal de Edição de Perfil */}
+      {isEditModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-md animate-in fade-in duration-300">
+          <div className="bg-white rounded-[2.5rem] shadow-2xl p-8 max-w-md w-full border border-white/20 animate-in zoom-in duration-300">
+            <div className="flex items-center justify-between mb-8">
+              <h2 className="text-2xl font-black text-slate-800">Editar Perfil</h2>
+              <button 
+                onClick={() => setIsEditModalOpen(false)}
+                className="p-2 bg-slate-100 hover:bg-red-50 text-slate-400 hover:text-red-500 rounded-xl transition-all"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleUpdateProfile} className="space-y-6">
+              <div>
+                <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">Nome Completo</label>
+                <div className="relative">
+                  <User className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-300" />
+                  <input 
+                    type="text"
+                    required
+                    value={editName}
+                    onChange={(e) => setEditName(e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-200 text-slate-800 pl-12 pr-4 py-4 rounded-2xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white transition-all font-bold"
+                    placeholder="Seu nome completo"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">E-mail de Acesso</label>
+                <div className="relative">
+                  <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-300" />
+                  <input 
+                    type="email"
+                    required
+                    value={editEmail}
+                    onChange={(e) => setEditEmail(e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-200 text-slate-800 pl-12 pr-4 py-4 rounded-2xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white transition-all font-bold"
+                    placeholder="seu@email.com"
+                  />
+                </div>
+              </div>
+
+              {updateError && (
+                <div className="p-4 bg-red-50 border border-red-100 text-red-600 rounded-2xl text-sm font-bold animate-in slide-in-from-top-2">
+                  {updateError}
+                </div>
+              )}
+
+              <div className="flex flex-col gap-3 pt-4">
+                <button 
+                  type="submit"
+                  disabled={isUpdatingProfile}
+                  className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-slate-300 text-white font-black py-4 rounded-2xl transition-all active:scale-95 shadow-lg shadow-blue-200 flex items-center justify-center gap-2"
+                >
+                  {isUpdatingProfile ? (
+                    <Activity className="w-5 h-5 animate-spin" />
+                  ) : (
+                    <>
+                      <Save className="w-5 h-5" />
+                      Salvar Alterações
+                    </>
+                  )}
+                </button>
+                <button 
+                  type="button"
+                  onClick={() => setIsEditModalOpen(false)}
+                  className="w-full bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold py-4 rounded-2xl transition-all"
+                >
+                  Cancelar
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -102,6 +102,27 @@ async def update_api_key(api_key: str = Body(..., embed=True), current_user: dic
     )
     return {"message": "Chave de API atualizada com sucesso"}
 
+class UpdateProfileRequest(BaseModel):
+    full_name: str
+    email: str
+
+@app.patch("/auth/profile")
+async def update_profile(data: UpdateProfileRequest, current_user: dict = Depends(get_current_user)):
+    # Se o e-mail mudou, verificar se o novo e-mail já está em uso
+    if data.email != current_user["email"]:
+        existing = await database.db.users.find_one({"email": data.email})
+        if existing:
+            raise HTTPException(status_code=400, detail="Este e-mail já está sendo utilizado por outro usuário.")
+    
+    await database.db.users.update_one(
+        {"_id": ObjectId(current_user["_id"])},
+        {"$set": {
+            "full_name": data.full_name,
+            "email": data.email
+        }}
+    )
+    return {"message": "Perfil atualizado com sucesso"}
+
 @app.post("/sessions")
 async def create_session(req: CreateSessionRequest, current_user: dict = Depends(get_current_user)):
     user_id = str(current_user["_id"])
