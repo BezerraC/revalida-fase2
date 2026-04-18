@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
-import axios from "axios";
+import { useEffect, useState, Suspense } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import api from "@/lib/api";
+import { useAuth } from "@/context/AuthContext";
 import { FileText, ArrowRight, Activity, ArrowLeft, BookOpen, Stethoscope } from "lucide-react";
 
 interface Fase2HistoryItem {
@@ -20,28 +21,54 @@ interface Fase1HistoryItem {
   turns_count: number;
 }
 
-export default function Historico() {
+export default function HistoricoWrapper() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen flex items-center justify-center bg-slate-50">
+        <div className="w-12 h-12 border-4 border-emerald-600/20 border-t-emerald-600 rounded-full animate-spin" />
+      </div>
+    }>
+      <HistoricoPage />
+    </Suspense>
+  );
+}
+
+function HistoricoPage() {
   const [fase2History, setFase2History] = useState<Fase2HistoryItem[]>([]);
   const [fase1History, setFase1History] = useState<Fase1HistoryItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<"fase2" | "fase1">("fase2");
   const router = useRouter();
+  const searchParams = useSearchParams();
 
   useEffect(() => {
-    setLoading(true);
-    Promise.all([
-      axios.get("http://localhost:8000/history"),
-      axios.get("http://localhost:8000/fase1/history")
-    ])
-      .then(([res2, res1]) => {
-          setFase2History(res2.data.history);
-          setFase1History(res1.data.history);
-          setLoading(false);
-      })
-      .catch(err => {
-          console.error("Error loading history", err);
-          setLoading(false);
-      });
+    const tab = searchParams.get("tab");
+    if (tab === "fase1" || tab === "fase2") {
+      setActiveTab(tab);
+    }
+  }, [searchParams]);
+
+  const { loading: authLoading } = useAuth();
+
+  useEffect(() => {
+    const loadHistory = async () => {
+      setLoading(true);
+      
+      try {
+        const [res2, res1] = await Promise.all([
+          api.get("/history"),
+          api.get("/fase1/history")
+        ]);
+        setFase2History(res2.data.history);
+        setFase1History(res1.data.history);
+      } catch (err) {
+        console.error("Error loading history", err);
+      } finally {
+        setLoading(false);
+      }
+    };
+    
+    loadHistory();
   }, []);
 
   return (

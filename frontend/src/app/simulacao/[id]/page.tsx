@@ -2,8 +2,9 @@
 
 import { useEffect, useState, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
-import axios from "axios";
-import { Mic, MicOff, Send, Activity, ArrowLeft, User, Bot, CheckCircle } from "lucide-react";
+import api from "@/lib/api";
+import { useAuth } from "@/context/AuthContext";
+import { Mic, MicOff, Send, Activity, ArrowLeft, User, Bot, CheckCircle, Key } from "lucide-react";
 
 interface ChatTurn {
   role: string;
@@ -20,6 +21,7 @@ export default function Simulacao() {
   const [finalTextBuffer, setFinalTextBuffer] = useState("");
   const [loadingReply, setLoadingReply] = useState(false);
   const [caseData, setCaseData] = useState<{ title: string; description: string } | null>(null);
+  const [showApiKeyWarning, setShowApiKeyWarning] = useState(false);
 
   const recognitionRef = useRef<any>(null);
   const silenceTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -36,18 +38,25 @@ export default function Simulacao() {
     historyRef.current = history;
   }, [history]);
 
+  const { loading: authLoading } = useAuth();
+
   useEffect(() => {
-    if (id) {
-      axios.get(`http://localhost:8000/sessions/${id}`)
-        .then((res) => {
-          setHistory(res.data.history || []);
-          if (res.data.case_data) {
-            setCaseData(res.data.case_data);
-          }
-        })
-        .catch(err => console.error("Error loading session:", err));
-    }
-  }, [id]);
+    const init = async () => {
+        if (!id) return;
+        
+        try {
+            const res = await api.get(`/sessions/${id}`);
+            setHistory(res.data.history || []);
+            if (res.data.case_data) {
+                setCaseData(res.data.case_data);
+            }
+        } catch (err) {
+            console.error("Error loading session:", err);
+            router.push("/");
+        }
+    };
+    init();
+  }, [id, router]);
 
   const sendMessageHandlerRef = useRef<((txt: string) => void) | null>(null);
 
@@ -70,7 +79,7 @@ export default function Simulacao() {
       }
 
       try {
-        const res = await axios.post("http://localhost:8000/chat", {
+        const res = await api.post("/chat", {
           session_id: id,
           message: { text: textToSend }
         });
@@ -80,6 +89,9 @@ export default function Simulacao() {
         speakText(replyText);
       } catch (err: any) {
         console.error("Erro no envio da mensagem", err);
+        if (err.response?.status === 403) {
+          setShowApiKeyWarning(true);
+        }
         const errorMsg = err.response?.data?.detail || "Ocorreu um erro de conexão. Tente novamente em instantes.";
         setHistory(prev => [...prev, { role: "model", text: `❌ ${errorMsg}` }]);
         isFetchingRef.current = false;
@@ -356,6 +368,34 @@ export default function Simulacao() {
           Você pode falar no som ambiente (pausa auto-envia em 1.5s) ou apenas digitar e enviar.
         </p>
       </footer>
+
+      {showApiKeyWarning && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-300">
+          <div className="bg-white rounded-[2rem] shadow-2xl p-8 max-w-md w-full border border-slate-100 text-center animate-in zoom-in duration-300">
+            <div className="w-20 h-20 bg-amber-50 text-amber-500 rounded-full flex items-center justify-center mx-auto mb-6">
+              <Key className="w-10 h-10" />
+            </div>
+            <h2 className="text-2xl font-black text-slate-800 mb-4">Chave de API Ausente</h2>
+            <p className="text-slate-500 mb-8 leading-relaxed font-medium">
+              Você precisa configurar sua chave de API do Gemini nas configurações do seu perfil para iniciar as simulações.
+            </p>
+            <div className="flex flex-col gap-3">
+              <button 
+                onClick={() => router.push("/perfil")}
+                className="w-full bg-blue-600 hover:bg-blue-700 text-white font-black py-4 rounded-2xl transition-all active:scale-95 shadow-lg shadow-blue-200"
+              >
+                Ir para o Perfil
+              </button>
+              <button 
+                onClick={() => router.push("/")}
+                className="w-full bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold py-4 rounded-2xl transition-all"
+              >
+                Voltar ao Início
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

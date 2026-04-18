@@ -5,3 +5,10 @@ google-generativeai
 python-dotenv
 pydantic
 certifi
+python-jose[cryptography]
+requests
+httpx
+bcrypt
+email-validator
+python-multipart
+pydantic[email]

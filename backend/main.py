@@ -1,17 +1,24 @@
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, HTTPException, Request, Depends, Body
 from fastapi.middleware.cors import CORSMiddleware
 import database
-from models import CaseModel, ChatSessionModel, ChatRequest, ChatTurn, Fase1Request, Fase1ChatRequest
+from models import CaseModel, ChatSessionModel, ChatRequest, ChatTurn, Fase1Request, Fase1ChatRequest, UserRegistration, UserLogin
 from bson import ObjectId
 import gemini_service
 import os
 from pydantic import BaseModel
+from auth_utils import get_current_user
+from auth_handler import get_password_hash, verify_password, create_access_token
+from datetime import datetime
+from typing import Optional
 
 app = FastAPI(title="Revalida AI API")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=[
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -34,7 +41,7 @@ async def shutdown_db_client():
     await database.close_mongo_connection()
 
 @app.get("/cases")
-async def get_cases():
+async def get_cases(current_user: dict = Depends(get_current_user)):
     cases_cursor = database.db.cases.find({})
     cases = []
     async for doc in cases_cursor:
@@ -45,13 +52,65 @@ async def get_cases():
 class CreateSessionRequest(BaseModel):
     case_id: str
 
+@app.post("/auth/register")
+async def register(user_data: UserRegistration):
+    if user_data.password != user_data.confirm_password:
+        raise HTTPException(status_code=400, detail="As senhas não coincidem")
+    
+    existing_user = await database.db.users.find_one({"email": user_data.email})
+    if existing_user:
+        raise HTTPException(status_code=400, detail="E-mail já cadastrado")
+    
+    hashed_password = get_password_hash(user_data.password)
+    user_dict = {
+        "full_name": user_data.full_name,
+        "email": user_data.email,
+        "hashed_password": hashed_password,
+        "role": "student",
+        "gemini_api_key": None,
+        "created_at": datetime.utcnow()
+    }
+    
+    await database.db.users.insert_one(user_dict)
+    return {"message": "Usuário criado com sucesso"}
+
+@app.post("/auth/login")
+async def login(credentials: UserLogin):
+    user = await database.db.users.find_one({"email": credentials.email})
+    if not user or not verify_password(credentials.password, user["hashed_password"]):
+        raise HTTPException(status_code=401, detail="E-mail ou senha incorretos")
+    
+    access_token = create_access_token(data={"sub": user["email"]})
+    return {"access_token": access_token, "token_type": "bearer"}
+
+@app.get("/auth/me")
+async def get_me(current_user: dict = Depends(get_current_user)):
+    return {
+        "id": str(current_user["_id"]),
+        "full_name": current_user["full_name"],
+        "email": current_user["email"],
+        "role": current_user.get("role", "student"),
+        "gemini_api_key": current_user.get("gemini_api_key"),
+        "created_at": current_user.get("created_at")
+    }
+
+@app.patch("/auth/profile/api-key")
+async def update_api_key(api_key: str = Body(..., embed=True), current_user: dict = Depends(get_current_user)):
+    await database.db.users.update_one(
+        {"_id": ObjectId(current_user["_id"])},
+        {"$set": {"gemini_api_key": api_key}}
+    )
+    return {"message": "Chave de API atualizada com sucesso"}
+
 @app.post("/sessions")
-async def create_session(req: CreateSessionRequest):
+async def create_session(req: CreateSessionRequest, current_user: dict = Depends(get_current_user)):
+    user_id = str(current_user["_id"])
     case = await database.db.cases.find_one({"_id": ObjectId(req.case_id)})
     if not case:
         raise HTTPException(status_code=404, detail="Case not found")
         
     session = {
+        "user_id": user_id,
         "case_id": str(case["_id"]),
         "history": [],
         "feedback": None
@@ -60,8 +119,9 @@ async def create_session(req: CreateSessionRequest):
     return {"session_id": str(result.inserted_id)}
 
 @app.get("/sessions/{session_id}")
-async def get_session(session_id: str):
-    session = await database.db.sessions.find_one({"_id": ObjectId(session_id)})
+async def get_session(session_id: str, current_user: dict = Depends(get_current_user)):
+    user_id = str(current_user["_id"])
+    session = await database.db.sessions.find_one({"_id": ObjectId(session_id), "user_id": user_id})
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
     session["_id"] = str(session["_id"])
@@ -74,8 +134,13 @@ async def get_session(session_id: str):
     return session
 
 @app.post("/chat")
-async def chat_interaction(request: ChatRequest):
-    session = await database.db.sessions.find_one({"_id": ObjectId(request.session_id)})
+async def chat_interaction(request: ChatRequest, current_user: dict = Depends(get_current_user)):
+    user_id = str(current_user["_id"])
+    api_key = current_user.get("gemini_api_key")
+    if not api_key:
+        raise HTTPException(status_code=403, detail="Você precisa configurar sua chave de API do Gemini no Perfil para usar o chat.")
+
+    session = await database.db.sessions.find_one({"_id": ObjectId(request.session_id), "user_id": user_id})
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
         
@@ -88,7 +153,8 @@ async def chat_interaction(request: ChatRequest):
     response_text = await gemini_service.get_patient_response(
         system_prompt=case["patient_system_prompt"],
         history=history_turns,
-        user_message=request.message.text
+        user_message=request.message.text,
+        api_key=api_key
     )
     
     # Atualizar doc no Mongo
@@ -103,8 +169,13 @@ async def chat_interaction(request: ChatRequest):
     return {"reply": response_text}
 
 @app.post("/feedback/{session_id}")
-async def get_feedback(session_id: str):
-    session = await database.db.sessions.find_one({"_id": ObjectId(session_id)})
+async def get_feedback(session_id: str, current_user: dict = Depends(get_current_user)):
+    user_id = str(current_user["_id"])
+    api_key = current_user.get("gemini_api_key")
+    if not api_key:
+        raise HTTPException(status_code=403, detail="Você precisa configurar sua chave de API do Gemini no Perfil para receber feedback.")
+
+    session = await database.db.sessions.find_one({"_id": ObjectId(session_id), "user_id": user_id})
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
         
@@ -120,10 +191,10 @@ async def get_feedback(session_id: str):
         return {"feedback": "Nenhuma interação ocorreu para ser avaliada."}
         
     try:
-        feedback_text = await gemini_service.generate_feedback(case_model, history_turns)
+        feedback_text = await gemini_service.generate_feedback(case_model, history_turns, api_key=api_key)
     except Exception as e:
         if "429" in str(e) or "quota" in str(e).lower():
-            raise HTTPException(status_code=429, detail="A Inteligência Artificial atingiu o limite gratuito de requisições por minuto do Google. Por favor, aguarde cerca de 1 minuto e aperte o botão tentar novamente.")
+            raise HTTPException(status_code=429, detail="A SUA chave de API do Google atingiu o limite gratuito. Por favor, aguarde cerca de 1 minuto.")
         raise HTTPException(status_code=500, detail="Ocorreu um erro interno na geração do feedback. Tente novamente.")
     
     await database.db.sessions.update_one(
@@ -135,8 +206,10 @@ async def get_feedback(session_id: str):
 
 
 @app.post("/fase1/sessions")
-async def create_fase1_session():
+async def create_fase1_session(current_user: dict = Depends(get_current_user)):
+    user_id = str(current_user["_id"])
     session = {
+        "user_id": user_id,
         "history": [],
         "document": ""
     }
@@ -144,16 +217,22 @@ async def create_fase1_session():
     return {"session_id": str(result.inserted_id)}
 
 @app.get("/fase1/sessions/{session_id}")
-async def get_fase1_session(session_id: str):
-    session = await database.db.fase1_sessions.find_one({"_id": ObjectId(session_id)})
+async def get_fase1_session(session_id: str, current_user: dict = Depends(get_current_user)):
+    user_id = str(current_user["_id"])
+    session = await database.db.fase1_sessions.find_one({"_id": ObjectId(session_id), "user_id": user_id})
     if not session:
         raise HTTPException(status_code=404, detail="Sessão não encontrada")
     session["_id"] = str(session["_id"])
     return session
 
 @app.post("/fase1/chat")
-async def fase1_chat(request: Fase1ChatRequest):
-    session = await database.db.fase1_sessions.find_one({"_id": ObjectId(request.session_id)})
+async def fase1_chat(request: Fase1ChatRequest, current_user: dict = Depends(get_current_user)):
+    user_id = str(current_user["_id"])
+    api_key = current_user.get("gemini_api_key")
+    if not api_key:
+        raise HTTPException(status_code=403, detail="Você precisa configurar sua chave de API do Gemini no Perfil para usar o tutor.")
+
+    session = await database.db.fase1_sessions.find_one({"_id": ObjectId(request.session_id), "user_id": user_id})
     if not session:
         raise HTTPException(status_code=404, detail="Sessão não encontrada")
         
@@ -164,10 +243,10 @@ async def fase1_chat(request: Fase1ChatRequest):
     history_turns.append({"role": "user", "text": user_text})
     
     try:
-        reply_data = await gemini_service.generate_fase1_chat(user_text, history_turns)
+        reply_data = await gemini_service.generate_fase1_chat(user_text, history_turns, api_key=api_key)
     except Exception as e:
         if "429" in str(e) or "quota" in str(e).lower() or "limite" in str(e).lower():
-            raise HTTPException(status_code=429, detail="O tutor está sobrecarregado (Limite Gratuito do Servidor). Por favor, aguarde 1 minuto e tente mandar a mensagem de novo.")
+            raise HTTPException(status_code=429, detail="O limite da sua chave de API foi atingido. Aguarde 1 minuto.")
         raise HTTPException(status_code=500, detail=str(e))
         
     ai_reply = reply_data.get("reply", "")
@@ -192,8 +271,12 @@ async def fase1_chat(request: Fase1ChatRequest):
 
 
 @app.get("/history")
-async def get_history():
-    sessions_cursor = database.db.sessions.find({"history.0": {"$exists": True}})
+async def get_history(current_user: dict = Depends(get_current_user)):
+    user_id = str(current_user["_id"])
+    sessions_cursor = database.db.sessions.find({
+        "user_id": user_id,
+        "history.0": {"$exists": True}
+    })
     
     out = []
     async for session in sessions_cursor:
@@ -215,8 +298,12 @@ async def get_history():
     return {"history": out}
 
 @app.get("/fase1/history")
-async def get_fase1_history():
-    sessions_cursor = database.db.fase1_sessions.find({"history.0": {"$exists": True}})
+async def get_fase1_history(current_user: dict = Depends(get_current_user)):
+    user_id = str(current_user["_id"])
+    sessions_cursor = database.db.fase1_sessions.find({
+        "user_id": user_id,
+        "history.0": {"$exists": True}
+    })
     
     out = []
     async for session in sessions_cursor:

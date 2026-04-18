@@ -2,7 +2,8 @@
 
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import axios from "axios";
+import api from "@/lib/api";
+import { useAuth } from "@/context/AuthContext";
 import { Activity, ClipboardCheck, ArrowLeft, AlertCircle } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 
@@ -14,19 +15,23 @@ export default function Feedback() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
+  const { loading: authLoading } = useAuth();
+
   useEffect(() => {
-    if (id) {
-      axios.post(`http://localhost:8000/feedback/${id}`)
-        .then((res) => {
-          setFeedback(res.data.feedback);
-          setLoading(false);
-        })
-        .catch(err => {
-          console.error("Error generating feedback:", err);
-          setError("Erro ao gerar feedback.");
-          setLoading(false);
-        });
-    }
+    const fetchFeedback = async () => {
+        if (!id) return;
+        
+        try {
+            const res = await api.post(`/feedback/${id}`);
+            setFeedback(res.data.feedback);
+        } catch (err: any) {
+            console.error("Error generating feedback:", err);
+            setError(err.response?.data?.detail || "Erro ao gerar feedback.");
+        } finally {
+            setLoading(false);
+        }
+    };
+    fetchFeedback();
   }, [id]);
 
   return (

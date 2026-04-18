@@ -2,8 +2,10 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import axios from "axios";
-import { Stethoscope, Activity, ArrowRight, History } from "lucide-react";
+import api from "@/lib/api";
+import { useAuth } from "@/context/AuthContext";
+import { Stethoscope, Activity, ArrowRight, History, LogOut, UserCircle } from "lucide-react";
+import Link from "next/link";
 
 interface CaseModel {
   _id: string;
@@ -16,22 +18,25 @@ export default function Home() {
   const [cases, setCases] = useState<CaseModel[]>([]);
   const [loading, setLoading] = useState(true);
   const router = useRouter();
+  const { logout, user, loading: authLoading } = useAuth();
 
   useEffect(() => {
-    axios.get("http://localhost:8000/cases")
-      .then((res) => {
+    const init = async () => {
+      try {
+        const res = await api.get("/cases");
         setCases(res.data);
-        setLoading(false);
-      })
-      .catch((err) => {
+      } catch (err) {
         console.error("Error fetching cases", err);
+      } finally {
         setLoading(false);
-      });
+      }
+    };
+    init();
   }, []);
 
   const handleStart = async (caseId: string) => {
     try {
-      const res = await axios.post("http://localhost:8000/sessions", { case_id: caseId });
+      const res = await api.post("/sessions", { case_id: caseId });
       router.push(`/simulacao/${res.data.session_id}`);
     } catch (error) {
       console.error("Failed to start session", error);
@@ -41,7 +46,7 @@ export default function Home() {
 
   const handleStartFase1 = async () => {
     try {
-      const res = await axios.post("http://localhost:8000/fase1/sessions");
+      const res = await api.post("/fase1/sessions");
       router.push(`/fase1/${res.data.session_id}`);
     } catch (error) {
       console.error("Failed to start Fase 1 session", error);
@@ -52,6 +57,31 @@ export default function Home() {
   return (
     <div className="min-h-screen bg-slate-50 p-8 font-sans">
       <div className="max-w-4xl mx-auto">
+        <div className="flex justify-between items-center mb-6">
+          <div className="flex items-center gap-2">
+            {user && (
+              <span className="text-slate-500 font-medium italic">
+                Olá, <span className="text-slate-800 font-bold not-italic">{user.full_name.split(' ')[0]}</span>
+              </span>
+            )}
+          </div>
+          <div className="flex items-center gap-3">
+            <Link
+              href="/perfil"
+              className="flex items-center gap-2 bg-white text-slate-700 font-bold px-4 py-2 rounded-xl border border-slate-200 hover:shadow-md transition-all group"
+            >
+              <UserCircle className="w-5 h-5 text-blue-500 group-hover:scale-110 transition-transform" />
+              Meu Perfil
+            </Link>
+            <button 
+              onClick={logout}
+              className="flex items-center gap-2 bg-white text-slate-500 font-bold px-4 py-2 rounded-xl border border-slate-200 hover:bg-red-50 hover:text-red-600 hover:border-red-100 transition-all shadow-sm"
+            >
+              <LogOut className="w-4 h-4" />
+              Sair
+            </button>
+          </div>
+        </div>
         <header className="mb-12 text-center">
           <div className="flex justify-center items-center mb-4">
             <div className="bg-blue-600 p-3 rounded-2xl shadow-lg shadow-blue-200">

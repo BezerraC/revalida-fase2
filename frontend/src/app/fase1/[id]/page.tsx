@@ -2,8 +2,9 @@
 
 import { useEffect, useState, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
-import axios from "axios";
-import { Mic, MicOff, Send, Activity, User, Bot, BookOpen, ArrowLeft, Image as ImageIcon } from "lucide-react";
+import api from "@/lib/api";
+import { useAuth } from "@/context/AuthContext";
+import { Mic, MicOff, Send, Activity, User, Bot, BookOpen, ArrowLeft, Image as ImageIcon, Key } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 
 interface ChatTurn {
@@ -22,6 +23,7 @@ export default function Fase1Tutor() {
   const [interimText, setInterimText] = useState("");
   const [finalTextBuffer, setFinalTextBuffer] = useState("");
   const [loadingReply, setLoadingReply] = useState(false);
+  const [showApiKeyWarning, setShowApiKeyWarning] = useState(false);
   
   const recognitionRef = useRef<any>(null);
   const silenceTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -38,19 +40,23 @@ export default function Fase1Tutor() {
       historyRef.current = history;
   }, [history]);
 
+  const { loading: authLoading } = useAuth();
+
   useEffect(() => {
-    if (id) {
-      axios.get(`http://localhost:8000/fase1/sessions/${id}`)
-        .then((res) => {
+    const init = async () => {
+        if (!id) return;
+        
+        try {
+            const res = await api.get(`/fase1/sessions/${id}`);
             setHistory(res.data.history || []);
             setDocumentContent(res.data.document || "");
-        })
-        .catch(err => {
+        } catch (err) {
             console.error("Error loading session:", err);
             alert("Sessão não encontrada.");
             router.push("/");
-        });
-    }
+        }
+    };
+    init();
   }, [id, router]);
 
   const sendMessageHandlerRef = useRef<((txt: string) => void) | null>(null);
@@ -74,7 +80,7 @@ export default function Fase1Tutor() {
       }
 
       try {
-        const res = await axios.post("http://localhost:8000/fase1/chat", {
+        const res = await api.post("/fase1/chat", {
           session_id: id,
           message: { text: textToSend }
         });
@@ -91,6 +97,10 @@ export default function Fase1Tutor() {
       } catch (err: any) {
         console.error("Erro no envio da mensagem", err);
         
+        if (err.response?.status === 403) {
+          setShowApiKeyWarning(true);
+        }
+
         const errorMsg = err.response?.data?.detail || "Ocorreu um erro de conexão com o Tutor IA. Tente novamente em instantes.";
         // Adiciona o erro diretamente no histórico de mensagens do chat como se fosse o tutor avisando o problema
         setHistory(prev => [...prev, { role: "model", text: `❌ ${errorMsg}` }]);
@@ -439,6 +449,33 @@ export default function Fase1Tutor() {
          </div>
       </div>
       
+      {showApiKeyWarning && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-300">
+          <div className="bg-white rounded-[2rem] shadow-2xl p-8 max-w-md w-full border border-slate-100 text-center animate-in zoom-in duration-300">
+            <div className="w-20 h-20 bg-amber-50 text-amber-500 rounded-full flex items-center justify-center mx-auto mb-6">
+              <Key className="w-10 h-10" />
+            </div>
+            <h2 className="text-2xl font-black text-slate-800 mb-4">Configuração Necessária</h2>
+            <p className="text-slate-500 mb-8 leading-relaxed font-medium">
+              O Tutor IA requer que você configure sua própria chave de API do Gemini no seu perfil para funcionar.
+            </p>
+            <div className="flex flex-col gap-3">
+              <button 
+                onClick={() => router.push("/perfil")}
+                className="w-full bg-blue-600 hover:bg-blue-700 text-white font-black py-4 rounded-2xl transition-all active:scale-95 shadow-lg shadow-blue-200"
+              >
+                Configurar no Perfil
+              </button>
+              <button 
+                onClick={() => router.push("/")}
+                className="w-full bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold py-4 rounded-2xl transition-all"
+              >
+                Sair
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

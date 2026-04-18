@@ -2,13 +2,13 @@ import os
 import json
 import google.generativeai as genai
 from models import ChatTurn, CaseModel
-from typing import List
+from typing import List, Optional
 
-def __init_gemini__():
-    genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
+def configure_genai(api_key: str):
+    genai.configure(api_key=api_key)
 
-async def get_patient_response(system_prompt: str, history: List[ChatTurn], user_message: str) -> str:
-    __init_gemini__()
+async def get_patient_response(system_prompt: str, history: List[ChatTurn], user_message: str, api_key: str) -> str:
+    configure_genai(api_key)
     
     generation_config = {
         "temperature": 0.5,
@@ -18,7 +18,7 @@ async def get_patient_response(system_prompt: str, history: List[ChatTurn], user
     }
     
     model = genai.GenerativeModel(
-        model_name="gemini-2.5-flash",
+        model_name="gemini-2.5-flash", # Corrigido para a versão estável atual ou preferida
         generation_config=generation_config,
         system_instruction=system_prompt,
     )
@@ -34,11 +34,11 @@ async def get_patient_response(system_prompt: str, history: List[ChatTurn], user
     except Exception as e:
         print(f"Erro no gemini: {e}")
         if "429" in str(e) or "quota" in str(e).lower():
-            return "*(Paciente ofegante - A API do Google atingiu o limite gratuito de mensagens por minuto. Por favor, espere 1 minuto e mande a mensagem novamente)*"
-        return "Desculpe doutor, não entendi. Pode repetir?"
+            return "*(Paciente ofegante - O limite da SUA chave de API do Google foi atingido. Por favor, espere um momento)*"
+        return f"*(Erro na API: {str(e)})*"
 
-async def generate_feedback(case: CaseModel, history: List[ChatTurn]) -> str:
-    __init_gemini__()
+async def generate_feedback(case: CaseModel, history: List[ChatTurn], api_key: str) -> str:
+    configure_genai(api_key)
     model = genai.GenerativeModel(model_name="gemini-2.5-flash")
     
     conversation_text = ""
@@ -72,8 +72,8 @@ async def generate_feedback(case: CaseModel, history: List[ChatTurn]) -> str:
         print(f"Erro no gemini ao gerar feedback: {e}")
         raise e
 
-async def generate_fase1_chat(user_message: str, history: List[ChatTurn]) -> dict:
-    __init_gemini__()
+async def generate_fase1_chat(user_message: str, history: List[ChatTurn], api_key: str) -> dict:
+    configure_genai(api_key)
     model = genai.GenerativeModel(
         model_name="gemini-2.5-flash",
         generation_config={"response_mime_type": "application/json"}
@@ -108,5 +108,5 @@ Aqui está o histórico recente da conversa:
     except Exception as e:
         print(f"Erro no gemini ao gerar fase 1: {e}")
         if "429" in str(e) or "quota" in str(e).lower():
-            raise Exception("Limite de requisições gratuitas atingido. Aguarde 1 minuto.")
-        raise Exception("Erro ao processar as informações do Tutor.")
+            raise Exception("Limite de requisições da SUA chave atingido. Aguarde um momento.")
+        raise Exception(f"Erro na API do Gemini: {str(e)}")
