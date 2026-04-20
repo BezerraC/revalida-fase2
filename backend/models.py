@@ -59,3 +59,13 @@ class Fase1SessionModel(BaseModel):
 class Fase1ChatRequest(BaseModel):
     session_id: str
     message: MessageInput
+
+class QuestionModel(BaseModel):
+    id: Optional[str] = Field(alias="_id", default=None)
+    exam_id: str # ex: "revalida_2025_1"
+    number: int
+    text: str
+    alternatives: dict # {"A": "...", "B": "..."}
+    correct_answer: Optional[str] = None # A, B, C, D ou "Anulada"
+    theme: str
+    images: List[str] = [] # Lista de caminhos para as imagens

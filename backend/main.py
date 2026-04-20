@@ -1,5 +1,6 @@
 from fastapi import FastAPI, HTTPException, Request, Depends, Body
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 import database
 from models import CaseModel, ChatSessionModel, ChatRequest, ChatTurn, Fase1Request, Fase1ChatRequest, UserRegistration, UserLogin
 from bson import ObjectId
@@ -23,6 +24,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Servir imagens dos exames
+app.mount("/exams/images", StaticFiles(directory="exams/images"), name="exams_images")
 
 @app.on_event("startup")
 async def startup_db_client():
@@ -445,3 +449,34 @@ async def update_case(case_id: str, case_data: CaseModel, admin: dict = Depends(
 async def delete_case(case_id: str, admin: dict = Depends(get_current_admin)):
     await database.db.cases.delete_one({"_id": ObjectId(case_id)})
     return {"message": "Caso removido com sucesso"}
+
+# ----------------------------------------------------------------
+# FASE 1: QUESTÕES E SIMULADOS
+# ----------------------------------------------------------------
+
+@app.get("/questions")
+async def get_questions(
+    exam_id: Optional[str] = None, 
+    theme: Optional[str] = None, 
+    current_user: dict = Depends(get_current_user)
+):
+    query = {}
+    if exam_id:
+        query["exam_id"] = exam_id
+    if theme:
+        query["theme"] = theme
+        
+    questions_cursor = database.db.questions.find(query)
+    questions = []
+    async for q in questions_cursor:
+        q["_id"] = str(q["_id"])
+        questions.append(q)
+    return questions
+
+@app.get("/questions/{question_id}")
+async def get_question(question_id: str, current_user: dict = Depends(get_current_user)):
+    q = await database.db.questions.find_one({"_id": ObjectId(question_id)})
+    if not q:
+        raise HTTPException(status_code=404, detail="Questão não encontrada")
+    q["_id"] = str(q["_id"])
+    return q
