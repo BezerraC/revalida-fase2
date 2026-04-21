@@ -69,3 +69,16 @@ class QuestionModel(BaseModel):
     correct_answer: Optional[str] = None # A, B, C, D ou "Anulada"
     theme: str
     images: List[str] = [] # Lista de caminhos para as imagens
+
+class SimuladoSessionModel(BaseModel):
+    id: Optional[str] = Field(alias="_id", default=None)
+    user_id: str
+    exam_id: Optional[str] = None
+    theme: Optional[str] = None
+    mode: str # treino / simulado
+    time_limit: str # free / 4h
+    answers: dict = {} # { "0": "A", "1": "B" }
+    current_index: int = 0
+    elapsed_time: int = 0
+    status: str = "active" # active / finished
+    created_at: datetime = Field(default_factory=datetime.utcnow)
