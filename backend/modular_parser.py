@@ -158,8 +158,8 @@ def build_omni_stream_v22(doc, exam_id):
             return (bbox[2] - bbox[0]) > 0.8 * page.rect.width and (bbox[3] - bbox[1]) > 0.8 * page.rect.height
 
         # --- Módulo de Detecção de Tabelas (Dual Strategy) ---
-        tabs_def = page.find_tables(snap_tolerance=5)
-        tabs_txt = page.find_tables(vertical_strategy="text", snap_tolerance=5)
+        tabs_def = page.find_tables(snap_tolerance=12)
+        tabs_txt = page.find_tables(vertical_strategy="text", snap_tolerance=12)
         
         raw_configs = []
         # Primeiro, pegamos as tabelas da estratégia padrão (vetorial)
@@ -260,7 +260,7 @@ def build_omni_stream_v22(doc, exam_id):
             
             # FILTRO: Ignorar boxes decorativos (Cabeçalho de Questão ou Área Livre)
             # EXCEÇÃO: Se for uma tabela de laboratório, não ignorar mesmo que contenha "QUESTÃO" (vazamento de OCR)
-            lab_keywords = ["REFERÊNCIA", "REFERENCIA", "ANTICORPO", "ESCORE-Z", "Z-SCORE", "UI/ML", "MG/DL", "MMOL/L", "VALOR:", "HEMOGRAMA", "URINA"]
+            lab_keywords = ["REFERÊNCIA", "REFERENCIA", "ANTICORPO", "ESCORE-Z", "Z-SCORE", "UI/ML", "MG/DL", "MMOL/L", "VALOR:", "HEMOGRAMA", "URINA", "RESULTADOS", "EXAMES", "LEUCÓCITOS", "HEMOGLOBINA", "HEMATÓCRITO", "UREIA", "CREATININA", "VHS", "TGO", "TGP"]
             inner_text = extract_text_with_translation(page, exam_id, clip=bbox).upper()
             is_lab_table = any(kw in inner_text for kw in lab_keywords)
 
@@ -298,7 +298,7 @@ def build_omni_stream_v22(doc, exam_id):
                 continue
 
             # Correção para o modo fallback: expandir x1 e podar y1
-            if not doc[p_idx].find_tables(snap_tolerance=5).tables:
+            if not doc[p_idx].find_tables(snap_tolerance=12).tables:
                 p_words = words # Reutilizar words extraído no topo
                 max_x1 = bbox[2]
                 new_y1 = bbox[3]
@@ -364,19 +364,65 @@ def build_omni_stream_v22(doc, exam_id):
                 new_y1 = max([w[3] for w in below_words]) + 5
                 bbox = (bbox[0], bbox[1], bbox[2], new_y1)
 
-            side = "L" if bbox[2] <= mid + 10 else "R"
-            if (bbox[2] - bbox[0]) > 350: side = "BOTH"
-            table_bboxes.append(bbox)
-            tables_meta.append({"p_idx": p_idx, "bbox": bbox, "side": side, "t_idx": t_idx, "type": "TABLE"})
+        # --- NOVO: Detecção Híbrida de Tabelas de Laboratório (PRECISA E COM CLUSTERING) ---
+        page_text_blocks = page.get_text("blocks")
+        lab_marks = ["HEMOGLOBINA", "LEUCÓCITOS", "UREIA", "CREATININA", "TGO", "TGP", "VHS", "GLICEMIA", "PLAQUETAS", "ERITRÓCITOS", "HEMATÓCRITO"]
+        lab_found_raw = [b for b in page_text_blocks if any(kw in b[4].upper() for kw in lab_marks)]
         
-        # Capturar IMAGENS puras (não tabelas)
+        if lab_found_raw:
+            # Agrupar blocos próximos verticalmente (Clustering)
+            # Isso evita que o script "engula" a página toda se houver dois exames distantes
+            lab_found_raw.sort(key=lambda b: b[1]) # Ordenar por Y
+            clusters = []
+            if lab_found_raw:
+                current_cluster = [lab_found_raw[0]]
+                for next_b in lab_found_raw[1:]:
+                    # Se a distância vertical for menor que 80px, pertence ao mesmo cluster (tabela)
+                    if next_b[1] - current_cluster[-1][3] < 80:
+                        current_cluster.append(next_b)
+                    else:
+                        clusters.append(current_cluster)
+                        current_cluster = [next_b]
+                clusters.append(current_cluster)
+
+            for cluster in clusters:
+                min_x = min(b[0] for b in cluster)
+                min_y = min(b[1] for b in cluster) - 25
+                max_x = max(b[2] for b in cluster) + 50
+                max_y = max(b[3] for b in cluster) + 5
+                
+                # Expandir lateralmente para capturar valores
+                for b in page_text_blocks:
+                    if (min_y - 15 <= b[1] <= max_y + 15) and (max_x - 60 <= b[0] <= max_x + 180):
+                        max_x = max(max_x, b[2] + 10)
+                        max_y = max(max_y, b[3] + 5)
+                
+                # SEGURANÇA: Se o bbox da "tabela" for alto demais (ex: > 400px) e não for um cluster denso, 
+                # pode estar engolindo texto. Vamos validar se há alternativas (A, B, C) dentro.
+                # Se houver, vamos podar o bbox.
+                for b in page_text_blocks:
+                    if (min_y < b[1] < max_y) and (b[4].strip().startswith(("A)", "B)", "C)", "D)"))):
+                        max_y = min(max_y, b[1] - 5)
+
+                is_new = True
+                for tb in table_bboxes:
+                    if fitz.Rect(min_x, min_y, max_x, max_y).intersects(fitz.Rect(tb)):
+                        is_new = False
+                        break
+                
+                if is_new:
+                    v_bbox = (min_x, min_y, max_x, max_y)
+                    side = "L" if max_x <= mid + 10 else ("R" if min_x >= mid - 10 else "BOTH")
+                    table_bboxes.append(v_bbox)
+                    tables_meta.append({"p_idx": p_idx, "bbox": v_bbox, "side": side, "t_idx": 999, "type": "TABLE"})
+
+        # --- RESTAURADO: Capturar IMAGENS puras (não tabelas) ---
         imgs_list = page.get_images()
         for img_idx, img_info in enumerate(imgs_list):
             rcts = page.get_image_rects(img_info)
             if rcts:
                 r = rcts[0]
                 if is_ribbon(r): continue
-                # Ignorar imagens no cabeçalho ou rodapé (geralmente logos e marcas d'água)
                 if r.y1 < 80 or r.y0 > 800: continue
                 img_side = "L" if r.x1 <= mid + 10 else ("R" if r.x0 >= mid - 10 else "BOTH")
                 tables_meta.append({"p_idx": p_idx, "bbox": (r.x0, r.y0, r.x1, r.y1), "side": img_side, "t_idx": img_idx, "type": "IMAGE", "img_info": img_info})
@@ -572,7 +618,10 @@ def process_exam_modular(exam_pdf_path, answers_pdf_path, exam_id):
                 page_obj = doc[ip_idx]
                 # O bbox da imagem pura está nos metadados
                 r = fitz.Rect(i_meta["bbox"])
-                padded_r = fitz.Rect(r.x0 - 5, r.y0 - 3, r.x1 + 5, r.y1 + 3)
+                # Padding adaptativo: Tabelas precisam de mais espaço, imagens puras menos
+                pad_x = 15 if i_meta["type"] == "TABLE" else 5
+                pad_y = 10 if i_meta["type"] == "TABLE" else 3
+                padded_r = fitz.Rect(r.x0 - pad_x, r.y0 - pad_y, r.x1 + pad_x, r.y1 + pad_y)
                 if not os.path.exists(fpath):
                     page_obj.get_pixmap(matrix=fitz.Matrix(3,3), clip=padded_r).save(fpath)
                 # Filtro de tamanho para evitar capturar pequenos ícones/lixo
