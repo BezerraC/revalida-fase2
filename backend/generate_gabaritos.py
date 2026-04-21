@@ -34,7 +34,8 @@ def parse_gabarito(pdf_path):
             if num_int > 120: continue 
             
             if ans in ["N", "X", "–", "—", "−", "-", "̶"]: ans = "Anulada"
-            answers[num_int] = ans
+            if num_int not in answers:
+                answers[num_int] = ans
         if len(answers) >= 80:
             return answers
 
@@ -90,7 +91,8 @@ def parse_gabarito(pdf_path):
                         ans = "Anulada"
                     
                     if ans in ["A", "B", "C", "D", "E", "Anulada"]:
-                        answers[num] = ans
+                        if num not in answers:
+                            answers[num] = ans
                         i += 1
                     else:
                         # Try to skip non-answer tokens
@@ -114,9 +116,9 @@ def parse_gabarito(pdf_path):
                         for j, num in enumerate(nums):
                             n = int(num)
                             ans = letters[j]
-                            if ans in ["X", "N", "-", "̶"]: ans = "Anulada"
                             if n <= 120:
-                                answers[n] = ans
+                                if n not in answers:
+                                    answers[n] = ans
                         break # Found the letters for this number block
 
     return answers
@@ -203,7 +205,8 @@ def generate_all_gabaritos(answers_dir, output_file):
     print(f"\nDone! Gabaritos saved to {output_file}")
 
 if __name__ == "__main__":
-    ANSWERS_DIR = r"d:\Trabalhos\revalida-fase2\backend\exams\answers"
-    OUTPUT_FILE = r"d:\Trabalhos\revalida-fase2\backend\gabaritos.json"
+    # Use relative paths from the backend directory
+    ANSWERS_DIR = os.path.join("exams", "answers")
+    OUTPUT_FILE = "gabaritos.json"
     
     generate_all_gabaritos(ANSWERS_DIR, OUTPUT_FILE)
