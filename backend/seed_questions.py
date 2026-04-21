@@ -14,7 +14,7 @@ DB_NAME = os.getenv("DB_NAME", "revalida-fase2")
 
 import certifi
 
-async def seed_questions(file_path="./exams/jsons/2025_1.json"):
+async def seed_questions(file_path="./exams/jsons/2025_2.json"):
     if not os.path.exists(file_path):
         print(f"Erro: {file_path} não encontrado.")
         return
@@ -57,5 +57,5 @@ async def seed_questions(file_path="./exams/jsons/2025_1.json"):
 
 if __name__ == "__main__":
     import sys
-    target = sys.argv[1] if len(sys.argv) > 1 else "./exams/jsons/2025_1.json"
+    target = sys.argv[1] if len(sys.argv) > 1 else "./exams/jsons/2025_2.json"
     asyncio.run(seed_questions(target))

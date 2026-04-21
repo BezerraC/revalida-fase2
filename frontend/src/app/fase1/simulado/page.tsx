@@ -34,6 +34,7 @@ function SimuladoConfigContent() {
     { id: "all", label: "Todas as Provas", year: "2025" },
     { id: "2025_1", label: "2025 - 1ª Edição", year: "2025" },
     { id: "2025_2", label: "2025 - 2ª Edição (Ledor)", year: "2025" },
+    { id: "2024_1", label: "2024 - 1ª Edição", year: "2024" },
   ];
 
   const themes = [
