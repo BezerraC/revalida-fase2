@@ -480,3 +480,82 @@ async def get_question(question_id: str, current_user: dict = Depends(get_curren
         raise HTTPException(status_code=404, detail="Questão não encontrada")
     q["_id"] = str(q["_id"])
     return q
+
+@app.get("/exams")
+async def get_unique_exams(current_user: dict = Depends(get_current_user)):
+    # Retorna uma lista única de exam_ids presentes no banco
+    exams_list = await database.db.questions.distinct("exam_id")
+    # Ordena de forma decrescente para os mais novos aparecerem primeiro
+    exams_list.sort(reverse=True)
+    return exams_list
+
+@app.get("/themes")
+async def get_unique_themes(current_user: dict = Depends(get_current_user)):
+    # Retorna uma lista única de temas presentes no banco
+    themes_list = await database.db.questions.distinct("theme")
+    # Filtra valores vazios ou nulos
+    themes_list = [t for t in themes_list if t and t.strip()]
+    themes_list.sort()
+    return themes_list
+
+@app.post("/simulado/sessions")
+async def create_simulado_session(
+    data: dict = Body(...),
+    current_user: dict = Depends(get_current_user)
+):
+    session_dict = {
+        "user_id": str(current_user["_id"]),
+        "exam_id": data.get("exam_id"),
+        "theme": data.get("theme"),
+        "mode": data.get("mode", "treino"),
+        "time_limit": data.get("time_limit", "free"),
+        "answers": {},
+        "current_index": 0,
+        "elapsed_time": 0,
+        "status": "active",
+        "created_at": datetime.utcnow()
+    }
+    result = await database.db.simulado_sessions.insert_one(session_dict)
+    return {"session_id": str(result.inserted_id)}
+
+@app.patch("/simulado/sessions/{session_id}")
+async def update_simulado_session(
+    session_id: str,
+    data: dict = Body(...),
+    current_user: dict = Depends(get_current_user)
+):
+    update_fields = {}
+    if "answers" in data: update_fields["answers"] = data["answers"]
+    if "current_index" in data: update_fields["current_index"] = data["current_index"]
+    if "elapsed_time" in data: update_fields["elapsed_time"] = data["elapsed_time"]
+    if "status" in data: update_fields["status"] = data["status"]
+
+    await database.db.simulado_sessions.update_one(
+        {"_id": ObjectId(session_id), "user_id": str(current_user["_id"])},
+        {"$set": update_fields}
+    )
+    return {"message": "Progresso salvo"}
+
+@app.get("/simulado/active")
+async def get_active_sessions(current_user: dict = Depends(get_current_user)):
+    cursor = database.db.simulado_sessions.find({
+        "user_id": str(current_user["_id"]),
+        "status": "active"
+    }).sort("created_at", -1)
+    
+    sessions = []
+    async for s in cursor:
+        s["_id"] = str(s["_id"])
+        sessions.append(s)
+    return sessions
+
+@app.get("/simulado/sessions/{session_id}")
+async def get_simulado_session(session_id: str, current_user: dict = Depends(get_current_user)):
+    session = await database.db.simulado_sessions.find_one({
+        "_id": ObjectId(session_id),
+        "user_id": str(current_user["_id"])
+    })
+    if not session:
+        raise HTTPException(status_code=404, detail="Sessão não encontrada")
+    session["_id"] = str(session["_id"])
+    return session
