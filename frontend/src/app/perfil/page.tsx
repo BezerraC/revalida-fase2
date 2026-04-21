@@ -3,20 +3,55 @@
 import { useAuth } from "@/context/AuthContext";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { User, Mail, Shield, Calendar, LogOut, ArrowLeft, Activity, Settings, UserCircle, History, BookOpen, Stethoscope, ArrowRight, Key, ExternalLink, CheckCircle, X, Save } from "lucide-react";
+import { 
+  User, 
+  Mail, 
+  Shield, 
+  Calendar, 
+  LogOut, 
+  ArrowLeft, 
+  Activity, 
+  Settings, 
+  UserCircle, 
+  History, 
+  BookOpen, 
+  Stethoscope, 
+  ArrowRight, 
+  Key, 
+  ExternalLink, 
+  CheckCircle, 
+  X, 
+  Save,
+  Target,
+  Clock,
+  Play
+} from "lucide-react";
 import Link from "next/link";
 import api from "@/lib/api";
+
+interface SimuladoSession {
+    _id: string;
+    exam_id?: string;
+    theme?: string;
+    answers: Record<string, string>;
+    elapsed_time: number;
+    created_at: string;
+    mode: string;
+    current_index: number;
+    time_limit: string;
+}
 
 export default function ProfilePage() {
   const { user, logout, loading, refreshUser } = useAuth();
   const router = useRouter();
   
-  // States para API Key
   const [apiKey, setApiKey] = useState("");
   const [isSavingKey, setIsSavingKey] = useState(false);
   const [saveKeySuccess, setSaveKeySuccess] = useState(false);
 
-  // States para Edição de Perfil
+  const [activeSessions, setActiveSessions] = useState<SimuladoSession[]>([]);
+  const [isLoadingSessions, setIsLoadingSessions] = useState(true);
+
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [editName, setEditName] = useState("");
   const [editEmail, setEditEmail] = useState("");
@@ -28,8 +63,20 @@ export default function ProfilePage() {
       setApiKey(user.gemini_api_key || "");
       setEditName(user.full_name || "");
       setEditEmail(user.email || "");
+      loadActiveSessions();
     }
   }, [user]);
+
+  async function loadActiveSessions() {
+    try {
+      const res = await api.get("/simulado/active");
+      setActiveSessions(res.data);
+    } catch (err) {
+      console.error("Erro ao carregar sessões ativas:", err);
+    } finally {
+      setIsLoadingSessions(false);
+    }
+  }
 
   if (loading) {
     return (
@@ -88,10 +135,17 @@ export default function ProfilePage() {
     });
   };
 
+  const handleResume = (session: SimuladoSession) => {
+      let url = `/fase1/simulado/questoes?session_id=${session._id}&mode=${session.mode}&time_limit=${session.time_limit}`;
+      if (session.exam_id) url += `&exam_id=${session.exam_id}`;
+      if (session.theme) url += `&theme=${session.theme}`;
+      router.push(url);
+  };
+
   return (
     <div className="min-h-screen bg-slate-50 p-6 sm:p-12 font-sans bg-[grid-slate-200_1px_1px] bg-[size:32px_32px]">
       <div className="max-w-3xl mx-auto">
-        {/* Header de Navegação */}
+        {/* Navigation Header */}
         <div className="mb-8 flex items-center justify-between">
           <Link
             href="/"
@@ -108,7 +162,7 @@ export default function ProfilePage() {
           </div>
         </div>
 
-        {/* Card de Perfil Principal */}
+        {/* Main Profile Card */}
         <div className="bg-white rounded-[2.5rem] shadow-2xl shadow-slate-200 border border-slate-100 overflow-hidden mb-8">
           <div className="h-32 bg-gradient-to-r from-blue-600 to-indigo-700 relative">
              <div className="absolute -bottom-16 left-10 p-2 bg-white rounded-[2rem] shadow-xl">
@@ -161,7 +215,7 @@ export default function ProfilePage() {
               </div>
             </div>
 
-            {/* Nova Seção: Configurações de IA */}
+            {/* AI Config Section */}
             <div className="mt-12 p-8 bg-slate-900 rounded-[2rem] text-white overflow-hidden relative group">
               <div className="absolute top-0 right-0 w-32 h-32 bg-blue-600/20 blur-3xl group-hover:bg-blue-600/30 transition-all"></div>
               <div className="relative z-10">
@@ -211,11 +265,52 @@ export default function ProfilePage() {
               </div>
             </div>
 
-            {/* Seção: Histórico de Estudos */}
+            {/* Active Simulations Section */}
+            {activeSessions.length > 0 && (
+                <div className="mt-12 space-y-6">
+                    <h3 className="text-lg font-black text-slate-800 flex items-center gap-2">
+                        <Clock className="w-5 h-5 text-indigo-600" />
+                        Simulados em Andamento
+                    </h3>
+                    <div className="space-y-4">
+                        {activeSessions.map((session) => {
+                            const answered = Object.keys(session.answers || {}).length;
+                            return (
+                                <div 
+                                    key={session._id}
+                                    className="flex items-center justify-between p-6 bg-slate-50 border border-slate-100 rounded-3xl hover:bg-white hover:shadow-xl hover:shadow-slate-200/50 transition-all group"
+                                >
+                                    <div className="flex items-center gap-4">
+                                        <div className="w-14 h-14 bg-white rounded-2xl shadow-sm flex items-center justify-center text-indigo-600">
+                                            <Target className="w-7 h-7" />
+                                        </div>
+                                        <div>
+                                            <p className="font-black text-slate-800">
+                                                {session.exam_id ? session.exam_id.replace('_', ' ') : session.theme}
+                                            </p>
+                                            <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mt-1">
+                                                {answered} Questões respondidas &bull; {session.mode}
+                                            </p>
+                                        </div>
+                                    </div>
+                                    <button 
+                                        onClick={() => handleResume(session)}
+                                        className="bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-3 rounded-xl font-black text-xs uppercase tracking-widest flex items-center gap-2 transition-all active:scale-95"
+                                    >
+                                        Retomar <Play className="w-3 h-3 fill-current" />
+                                    </button>
+                                </div>
+                            );
+                        })}
+                    </div>
+                </div>
+            )}
+
+            {/* History Section */}
             <div className="mt-12">
               <h3 className="text-lg font-black text-slate-800 mb-4 flex items-center gap-2">
                 <History className="w-5 h-5 text-blue-600" />
-                Meu Histórico de Estudos
+                Histórico de Atividades
               </h3>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <Link 
@@ -227,8 +322,8 @@ export default function ProfilePage() {
                       <Stethoscope className="w-6 h-6" />
                     </div>
                     <div className="text-left">
-                      <p className="text-sm font-black text-slate-800">Simulações de Prova</p>
-                      <p className="text-xs font-bold text-slate-500 italic">Fase 2 (Prática)</p>
+                      <p className="text-sm font-black text-slate-800">Simulações Práticas</p>
+                      <p className="text-xs font-bold text-slate-500 italic">Fase 2</p>
                     </div>
                   </div>
                   <ArrowRight className="w-5 h-5 text-slate-300 group-hover:text-blue-600 group-hover:translate-x-1 transition-all" />
@@ -243,8 +338,8 @@ export default function ProfilePage() {
                       <BookOpen className="w-6 h-6" />
                     </div>
                     <div className="text-left">
-                      <p className="text-sm font-black text-slate-800">Revisão por Tópicos</p>
-                      <p className="text-xs font-bold text-slate-500 italic">Fase 1 (Teórica)</p>
+                      <p className="text-sm font-black text-slate-800">Questões Teóricas</p>
+                      <p className="text-xs font-bold text-slate-500 italic">Fase 1</p>
                     </div>
                   </div>
                   <ArrowRight className="w-5 h-5 text-slate-300 group-hover:text-indigo-600 group-hover:translate-x-1 transition-all" />
@@ -258,14 +353,14 @@ export default function ProfilePage() {
                 className="flex items-center gap-2 bg-slate-800 hover:bg-slate-900 text-white px-6 py-4 rounded-2xl font-bold transition-all active:scale-95 shadow-lg shadow-slate-200"
                >
                   <Settings className="w-5 h-5" />
-                  Editar Minhas Informações
+                  Editar Perfil
                </button>
                <button 
                   onClick={logout}
                   className="flex items-center gap-2 bg-white hover:bg-red-50 text-red-600 px-6 py-4 rounded-2xl font-bold border border-slate-200 hover:border-red-200 transition-all active:scale-95 group shadow-sm"
                >
                   <LogOut className="w-5 h-5 text-red-500 group-hover:-translate-x-1 transition-transform" />
-                  Sair do Sistema
+                  Sair
                </button>
             </div>
           </div>
@@ -279,7 +374,7 @@ export default function ProfilePage() {
         </div>
       </div>
 
-      {/* Modal de Edição de Perfil */}
+      {/* Edit Profile Modal */}
       {isEditModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-md animate-in fade-in duration-300">
           <div className="bg-white rounded-[2.5rem] shadow-2xl p-8 max-w-md w-full border border-white/20 animate-in zoom-in duration-300">
