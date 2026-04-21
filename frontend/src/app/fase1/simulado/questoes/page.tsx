@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, Suspense } from "react";
+import { useEffect, useState, Suspense, useCallback } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { 
   ChevronLeft, 
@@ -13,7 +13,9 @@ import {
   ArrowRight,
   Trophy,
   RefreshCw,
-  Home
+  Home,
+  LogOut,
+  Save
 } from "lucide-react";
 import api from "@/lib/api";
 
@@ -32,26 +34,90 @@ function ActiveSimuladoContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   
+  const sessionId = searchParams.get("session_id");
   const mode = searchParams.get("mode") || "treino";
   const examId = searchParams.get("exam_id");
   const theme = searchParams.get("theme");
+  const timeLimit = searchParams.get("time_limit"); // "free" ou "4h"
 
   const [questions, setQuestions] = useState<Question[]>([]);
   const [loading, setLoading] = useState(true);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [answers, setAnswers] = useState<Record<number, string>>({});
   const [showResults, setShowResults] = useState(false);
-  const [startTime] = useState(Date.now());
-  const [elapsed, setElapsed] = useState(0);
+  const [showExitModal, setShowExitModal] = useState(false);
+  
+  // Timer States
+  const [elapsed, setElapsed] = useState(0); 
+  const [remaining, setRemaining] = useState(timeLimit === "4h" ? 14400 : 0); 
+  
   const [zoomImage, setZoomImage] = useState<string | null>(null);
 
+  // Função para salvar progresso no backend
+  const saveProgress = useCallback(async (currentAnswers: any, index: number, timeElapsed: number, finished: boolean = false) => {
+    if (!sessionId) return;
+    try {
+      await api.patch(`/simulado/sessions/${sessionId}`, {
+        answers: currentAnswers,
+        current_index: index,
+        elapsed_time: timeElapsed,
+        status: finished ? "finished" : "active"
+      });
+    } catch (err) {
+      console.error("Erro ao salvar progresso:", err);
+    }
+  }, [sessionId]);
+
   useEffect(() => {
-    fetchQuestions();
+    async function init() {
+      setLoading(true);
+      await fetchQuestions();
+      
+      // Se tiver session_id, carregar dados salvos
+      if (sessionId) {
+        try {
+          const sessionRes = await api.get(`/simulado/sessions/${sessionId}`);
+          const session = sessionRes.data;
+          setAnswers(session.answers || {});
+          setCurrentIndex(session.current_index || 0);
+          setElapsed(session.elapsed_time || 0);
+          if (timeLimit === "4h") {
+            setRemaining(14400 - (session.elapsed_time || 0));
+          }
+        } catch (err) {
+          console.error("Erro ao carregar sessão:", err);
+        }
+      }
+      setLoading(false);
+    }
+    
+    init();
+
     const interval = setInterval(() => {
-      setElapsed(Math.floor((Date.now() - startTime) / 1000));
+      setElapsed(prev => {
+        const next = prev + 1;
+        // Auto-save a cada 30 segundos
+        if (next % 30 === 0) {
+            // Usamos refs ou states funcionais aqui se necessário, 
+            // mas o saveProgress será chamado explicitamente em ações do usuário também.
+        }
+        return next;
+      });
+
+      if (timeLimit === "4h") {
+        setRemaining(prev => {
+          if (prev <= 1) {
+            clearInterval(interval);
+            setShowResults(true);
+            return 0;
+          }
+          return prev - 1;
+        });
+      }
     }, 1000);
+
     return () => clearInterval(interval);
-  }, []);
+  }, [sessionId, timeLimit]);
 
   async function fetchQuestions() {
     try {
@@ -64,29 +130,37 @@ function ActiveSimuladoContent() {
       setQuestions(res.data);
     } catch (err) {
       console.error("Erro ao carregar questões:", err);
-    } finally {
-      setLoading(false);
     }
   }
 
   const handleSelect = (letter: string) => {
     if (showResults) return;
-    if (mode === "treino" && answers[currentIndex]) return; // Já respondeu no modo treino
+    if (mode === "treino" && answers[currentIndex]) return; 
 
-    setAnswers({ ...answers, [currentIndex]: letter });
+    const newAnswers = { ...answers, [currentIndex]: letter };
+    setAnswers(newAnswers);
+    saveProgress(newAnswers, currentIndex, elapsed);
   };
 
   const handleNext = () => {
     if (currentIndex < questions.length - 1) {
-      setCurrentIndex(currentIndex + 1);
+      const nextIdx = currentIndex + 1;
+      setCurrentIndex(nextIdx);
+      saveProgress(answers, nextIdx, elapsed);
     } else {
       setShowResults(true);
+      saveProgress(answers, currentIndex, elapsed, true);
     }
   };
 
   const formatTime = (seconds: number) => {
-    const min = Math.floor(seconds / 60);
+    const hours = Math.floor(seconds / 3600);
+    const min = Math.floor((seconds % 3600) / 60);
     const sec = seconds % 60;
+    
+    if (hours > 0) {
+      return `${hours}:${min < 10 ? "0" : ""}${min}:${sec < 10 ? "0" : ""}${sec}`;
+    }
     return `${min}:${sec < 10 ? "0" : ""}${sec}`;
   };
 
@@ -138,7 +212,7 @@ function ActiveSimuladoContent() {
                    <p className="text-3xl font-black text-indigo-600">{percent}%</p>
                 </div>
                 <div className="bg-slate-50 p-6 rounded-3xl">
-                   <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Tempo</p>
+                   <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Tempo Total</p>
                    <p className="text-3xl font-black text-slate-800">{formatTime(elapsed)}</p>
                 </div>
              </div>
@@ -202,11 +276,44 @@ function ActiveSimuladoContent() {
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col font-sans">
       
+      {/* Confirmation Modal */}
+      {showExitModal && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-300" onClick={() => setShowExitModal(false)} />
+          <div className="relative bg-white rounded-[2.5rem] p-10 max-w-md w-full shadow-2xl border border-slate-100 animate-in zoom-in-95 duration-300 space-y-8">
+            <div className="w-20 h-20 bg-amber-100 rounded-3xl flex items-center justify-center mx-auto text-amber-600">
+               <LogOut className="w-10 h-10" />
+            </div>
+            <div className="text-center space-y-2">
+               <h3 className="text-2xl font-black text-slate-900">Pausar Simulado?</h3>
+               <p className="text-slate-500 font-medium">Seu progresso será salvo automaticamente e você poderá continuar de onde parou.</p>
+            </div>
+            <div className="grid gap-3">
+               <button 
+                 onClick={async () => {
+                   await saveProgress(answers, currentIndex, elapsed);
+                   router.push("/fase1");
+                 }} 
+                 className="w-full bg-slate-900 text-white py-4 rounded-2xl font-black flex items-center justify-center gap-2 hover:bg-black transition-all"
+               >
+                 <Save className="w-5 h-5" /> Salvar e Sair
+               </button>
+               <button 
+                 onClick={() => setShowExitModal(false)}
+                 className="w-full bg-slate-100 text-slate-600 py-4 rounded-2xl font-black hover:bg-slate-200 transition-all"
+               >
+                 Continuar Treinando
+               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Simulation Header */}
       <div className="bg-white border-b border-slate-100 px-8 py-5 flex items-center justify-between sticky top-0 z-20 shadow-sm">
          <div className="flex items-center gap-4">
             <button 
-              onClick={() => { if(confirm("Deseja interromper o simulado?")) router.push("/fase1/simulado"); }}
+              onClick={() => setShowExitModal(true)}
               className="p-2 hover:bg-slate-100 rounded-xl transition-colors"
             >
               <ChevronLeft className="w-6 h-6 text-slate-400" />
@@ -219,9 +326,15 @@ function ActiveSimuladoContent() {
          </div>
 
          <div className="flex items-center gap-12">
-            <div className="hidden md:flex items-center gap-3 bg-slate-50 px-4 py-2 rounded-xl border border-slate-100">
-               <Timer className="w-5 h-5 text-indigo-500" />
-               <span className="font-black text-slate-700 tabular-nums">{formatTime(elapsed)}</span>
+            <div className={`hidden md:flex items-center gap-3 px-4 py-2 rounded-xl border transition-colors ${
+              timeLimit === "4h" && remaining < 300 
+                ? "bg-red-50 border-red-200 text-red-600 animate-pulse" 
+                : "bg-slate-50 border-slate-100 text-slate-700"
+            }`}>
+               <Timer className={`w-5 h-5 ${timeLimit === "4h" && remaining < 300 ? "text-red-500" : "text-indigo-500"}`} />
+               <span className="font-black tabular-nums">
+                 {timeLimit === "4h" ? formatTime(remaining) : formatTime(elapsed)}
+               </span>
             </div>
             
             <div className="w-48 bg-slate-100 h-2 rounded-full overflow-hidden">
