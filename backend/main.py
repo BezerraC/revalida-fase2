@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException, Request, Depends, Body
+from fastapi import FastAPI, HTTPException, Request, Depends, Body, File, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 import database
@@ -27,6 +27,11 @@ app.add_middleware(
 
 # Servir imagens dos exames
 app.mount("/exams/images", StaticFiles(directory="exams/images"), name="exams_images")
+
+# Servir imagens de perfil
+if not os.path.exists("uploads/profiles"):
+    os.makedirs("uploads/profiles", exist_ok=True)
+app.mount("/uploads/profiles", StaticFiles(directory="uploads/profiles"), name="profile_images")
 
 @app.on_event("startup")
 async def startup_db_client():
@@ -95,6 +100,9 @@ async def get_me(current_user: dict = Depends(get_current_user)):
         "email": current_user["email"],
         "role": current_user.get("role", "student"),
         "gemini_api_key": current_user.get("gemini_api_key"),
+        "profile_image": current_user.get("profile_image"),
+        "total_score": current_user.get("total_score", 0),
+        "level": current_user.get("level", 1),
         "created_at": current_user.get("created_at")
     }
 
@@ -126,6 +134,32 @@ async def update_profile(data: UpdateProfileRequest, current_user: dict = Depend
         }}
     )
     return {"message": "Perfil atualizado com sucesso"}
+
+@app.post("/auth/profile/image")
+async def upload_profile_image(file: UploadFile = File(...), current_user: dict = Depends(get_current_user)):
+    # Validar extensão
+    ext = file.filename.split(".")[-1].lower()
+    if ext not in ["jpg", "jpeg", "png", "webp"]:
+        raise HTTPException(status_code=400, detail="Apenas imagens JPG, PNG ou WEBP são permitidas.")
+    
+    # Criar nome único
+    user_id = str(current_user["_id"])
+    filename = f"{user_id}.{ext}"
+    file_path = f"uploads/profiles/{filename}"
+    
+    with open(file_path, "wb") as f:
+        f.write(await file.read())
+    
+    # Gerar URL relativa (ou absoluta dependendo da preferência)
+    # Aqui usaremos a relativa que o StaticFiles serve
+    image_url = f"/uploads/profiles/{filename}"
+    
+    await database.db.users.update_one(
+        {"_id": ObjectId(user_id)},
+        {"$set": {"profile_image": image_url}}
+    )
+    
+    return {"image_url": image_url, "message": "Foto de perfil atualizada!"}
 
 @app.post("/sessions")
 async def create_session(req: CreateSessionRequest, current_user: dict = Depends(get_current_user)):
@@ -163,6 +197,14 @@ async def get_session(session_id: str, current_user: dict = Depends(get_current_
         session["case_data"] = case
         
     return session
+
+@app.delete("/sessions/{session_id}")
+async def delete_session(session_id: str, current_user: dict = Depends(get_current_user)):
+    user_id = str(current_user["_id"])
+    result = await database.db.sessions.delete_one({"_id": ObjectId(session_id), "user_id": user_id})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Sessão não encontrada ou não pertence ao usuário")
+    return {"message": "Sessão removida com sucesso"}
 
 @app.get("/admin/sessions")
 async def get_all_sessions(admin: dict = Depends(get_current_admin)):
@@ -279,6 +321,14 @@ async def get_fase1_session(session_id: str, current_user: dict = Depends(get_cu
         raise HTTPException(status_code=404, detail="Sessão não encontrada")
     session["_id"] = str(session["_id"])
     return session
+
+@app.delete("/fase1/sessions/{session_id}")
+async def delete_fase1_session(session_id: str, current_user: dict = Depends(get_current_user)):
+    user_id = str(current_user["_id"])
+    result = await database.db.fase1_sessions.delete_one({"_id": ObjectId(session_id), "user_id": user_id})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Sessão não encontrada ou não pertence ao usuário")
+    return {"message": "Sessão removida com sucesso"}
 
 @app.post("/fase1/chat")
 async def fase1_chat(request: Fase1ChatRequest, current_user: dict = Depends(get_current_user)):
@@ -457,9 +507,24 @@ async def delete_case(case_id: str, admin: dict = Depends(get_current_admin)):
 @app.get("/questions")
 async def get_questions(
     exam_id: Optional[str] = None, 
-    theme: Optional[str] = None, 
+    theme: Optional[str] = None,
+    session_id: Optional[str] = None,
     current_user: dict = Depends(get_current_user)
 ):
+    if session_id:
+        session = await database.db.simulado_sessions.find_one({"_id": ObjectId(session_id)})
+        if session and session.get("question_ids"):
+            q_ids = [ObjectId(qid) for qid in session["question_ids"]]
+            # Buscar na ordem específica
+            questions_cursor = database.db.questions.find({"_id": {"$in": q_ids}})
+            questions_map = {}
+            async for q in questions_cursor:
+                q["_id"] = str(q["_id"])
+                questions_map[q["_id"]] = q
+            
+            # Reordenar
+            return [questions_map[qid] for qid in session["question_ids"] if qid in questions_map]
+
     query = {}
     if exam_id:
         query["exam_id"] = exam_id
@@ -503,12 +568,29 @@ async def create_simulado_session(
     data: dict = Body(...),
     current_user: dict = Depends(get_current_user)
 ):
+    exam_id = data.get("exam_id")
+    theme = data.get("theme")
+    
+    # Buscar questões para fixar a ordem
+    query = {}
+    if exam_id: query["exam_id"] = exam_id
+    if theme: query["theme"] = theme
+    
+    questions_cursor = database.db.questions.find(query)
+    question_ids = []
+    async for q in questions_cursor:
+        question_ids.append(str(q["_id"]))
+
+    if not question_ids:
+        raise HTTPException(status_code=400, detail="Nenhuma questão encontrada para os filtros selecionados")
+
     session_dict = {
         "user_id": str(current_user["_id"]),
-        "exam_id": data.get("exam_id"),
-        "theme": data.get("theme"),
+        "exam_id": exam_id,
+        "theme": theme,
         "mode": data.get("mode", "treino"),
         "time_limit": data.get("time_limit", "free"),
+        "question_ids": question_ids,
         "answers": {},
         "current_index": 0,
         "elapsed_time": 0,
@@ -528,7 +610,7 @@ async def update_simulado_session(
     if "answers" in data: update_fields["answers"] = data["answers"]
     if "current_index" in data: update_fields["current_index"] = data["current_index"]
     if "elapsed_time" in data: update_fields["elapsed_time"] = data["elapsed_time"]
-    if "status" in data: update_fields["status"] = data["status"]
+    # Removido status do PATCH para evitar finalização precoce sem cálculo de result
 
     await database.db.simulado_sessions.update_one(
         {"_id": ObjectId(session_id), "user_id": str(current_user["_id"])},
@@ -551,11 +633,126 @@ async def get_active_sessions(current_user: dict = Depends(get_current_user)):
 
 @app.get("/simulado/sessions/{session_id}")
 async def get_simulado_session(session_id: str, current_user: dict = Depends(get_current_user)):
-    session = await database.db.simulado_sessions.find_one({
-        "_id": ObjectId(session_id),
-        "user_id": str(current_user["_id"])
-    })
+    session = await database.db.simulado_sessions.find_one({"_id": ObjectId(session_id), "user_id": str(current_user["_id"])})
     if not session:
         raise HTTPException(status_code=404, detail="Sessão não encontrada")
     session["_id"] = str(session["_id"])
     return session
+
+@app.post("/simulado/sessions/{session_id}/finish")
+async def finish_simulado_session(session_id: str, current_user: dict = Depends(get_current_user)):
+    user_id = str(current_user["_id"])
+    session = await database.db.simulado_sessions.find_one({"_id": ObjectId(session_id), "user_id": user_id})
+    
+    if not session:
+        raise HTTPException(status_code=404, detail="Sessão não encontrada")
+    
+    # Se já estiver finalizada E tiver resultado, apenas retorna
+    if session.get("status") == "finished" and session.get("result"):
+        return {"message": "Sessão já finalizada", "result": session.get("result")}
+
+    # Recalcular resultados para garantir integridade
+    answers = session.get("answers", {})
+    question_ids = session.get("question_ids", [])
+    
+    if not question_ids:
+        # Fallback se a sessão for antiga e não tiver question_ids
+        query = {}
+        if session.get("exam_id"): query["exam_id"] = session.get("exam_id")
+        if session.get("theme"): query["theme"] = session.get("theme")
+        questions_cursor = database.db.questions.find(query)
+        questions = []
+        async for q in questions_cursor:
+            questions.append(q)
+    else:
+        q_obj_ids = [ObjectId(qid) for qid in question_ids]
+        questions_cursor = database.db.questions.find({"_id": {"$in": q_obj_ids}})
+        questions_map = {}
+        async for q in questions_cursor:
+            questions_map[str(q["_id"])] = q
+        questions = [questions_map[qid] for qid in question_ids if qid in questions_map]
+    
+    if not questions:
+        raise HTTPException(status_code=400, detail="Não foi possível recuperar as questões desta sessão")
+
+    total_questions = len(questions)
+    correct_answers = 0
+    theme_metrics = {}
+
+    for i, q in enumerate(questions):
+        q_theme = q.get("theme", "Geral")
+        if q_theme not in theme_metrics:
+            theme_metrics[q_theme] = {"correct": 0, "total": 0}
+        
+        theme_metrics[q_theme]["total"] += 1
+        
+        user_ans = answers.get(str(i)) # O frontend salva como index stringificado no MongoDB às vezes ou int
+        if user_ans is None:
+            user_ans = answers.get(i)
+            
+        if user_ans == q["correct_answer"] or q["correct_answer"] == "Anulada":
+            correct_answers += 1
+            theme_metrics[q_theme]["correct"] += 1
+
+    score_percentage = (correct_answers / total_questions) * 100 if total_questions > 0 else 0
+    
+    result_data = {
+        "total_questions": total_questions,
+        "correct_answers": correct_answers,
+        "score_percentage": round(score_percentage, 2),
+        "theme_metrics": theme_metrics,
+        "finished_at": datetime.utcnow()
+    }
+
+    # Atualizar sessão
+    await database.db.simulado_sessions.update_one(
+        {"_id": ObjectId(session_id)},
+        {"$set": {"status": "finished", "result": result_data}}
+    )
+
+    # Atualizar score do usuário (ex: cada acerto vale 10 pontos)
+    points_earned = correct_answers * 10
+    
+    user = await database.db.users.find_one({"_id": ObjectId(user_id)})
+    new_total_score = user.get("total_score", 0) + points_earned
+    new_level = (new_total_score // 1000) + 1
+
+    await database.db.users.update_one(
+        {"_id": ObjectId(user_id)},
+        {"$set": {"total_score": new_total_score, "level": new_level}}
+    )
+
+    return {"message": "Simulado finalizado com sucesso", "result": result_data}
+
+@app.delete("/simulado/sessions/{session_id}")
+async def delete_simulado_session(session_id: str, current_user: dict = Depends(get_current_user)):
+    user_id = str(current_user["_id"])
+    result = await database.db.simulado_sessions.delete_one({"_id": ObjectId(session_id), "user_id": user_id})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Sessão não encontrada ou não pertence ao usuário")
+    return {"message": "Sessão removida com sucesso"}
+
+@app.get("/simulado/history")
+async def get_simulado_history(current_user: dict = Depends(get_current_user)):
+    user_id = str(current_user["_id"])
+    cursor = database.db.simulado_sessions.find({
+        "user_id": user_id,
+        "status": "finished"
+    }).sort("created_at", -1)
+    
+    out = []
+    async for s in cursor:
+        res = s.get("result", {})
+        # Tenta pegar o nome do exame ou o tema
+        title = s.get("exam_id", "Simulado").replace("_", " ") if s.get("exam_id") else s.get("theme", "Simulado Personalizado")
+        
+        out.append({
+            "session_id": str(s["_id"]),
+            "title": title,
+            "correct_answers": res.get("correct_answers", 0),
+            "total_questions": res.get("total_questions", 0),
+            "score_percentage": res.get("score_percentage", 0),
+            "finished_at": res.get("finished_at") or s.get("created_at"),
+            "mode": s.get("mode", "treino")
+        })
+    return {"history": out}

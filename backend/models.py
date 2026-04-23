@@ -19,6 +19,9 @@ class UserModel(BaseModel):
     hashed_password: str
     role: str = "student"
     gemini_api_key: Optional[str] = None
+    profile_image: Optional[str] = None
+    total_score: int = 0
+    level: int = 1
     created_at: datetime = Field(default_factory=datetime.utcnow)
 
 class CaseModel(BaseModel):
@@ -70,6 +73,17 @@ class QuestionModel(BaseModel):
     theme: str
     images: List[str] = [] # Lista de caminhos para as imagens
 
+class ThemeMetric(BaseModel):
+    correct: int
+    total: int
+
+class SimulationResult(BaseModel):
+    total_questions: int
+    correct_answers: int
+    score_percentage: float
+    theme_metrics: dict # { "Theme Name": ThemeMetric }
+    finished_at: datetime = Field(default_factory=datetime.utcnow)
+
 class SimuladoSessionModel(BaseModel):
     id: Optional[str] = Field(alias="_id", default=None)
     user_id: str
@@ -77,8 +91,10 @@ class SimuladoSessionModel(BaseModel):
     theme: Optional[str] = None
     mode: str # treino / simulado
     time_limit: str # free / 4h
+    question_ids: List[str] = []
     answers: dict = {} # { "0": "A", "1": "B" }
     current_index: int = 0
     elapsed_time: int = 0
     status: str = "active" # active / finished
+    result: Optional[SimulationResult] = None
     created_at: datetime = Field(default_factory=datetime.utcnow)

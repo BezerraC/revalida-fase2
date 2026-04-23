@@ -4,7 +4,8 @@ import { useEffect, useState, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import api from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
-import { FileText, ArrowRight, Activity, ArrowLeft, BookOpen, Stethoscope } from "lucide-react";
+import { FileText, ArrowRight, Activity, ArrowLeft, BookOpen, Stethoscope, Trash2 } from "lucide-react";
+import ConfirmModal from "@/components/ConfirmModal";
 
 interface Fase2HistoryItem {
   session_id: string;
@@ -21,11 +22,21 @@ interface Fase1HistoryItem {
   turns_count: number;
 }
 
+interface SimuladoHistoryItem {
+  session_id: string;
+  title: string;
+  correct_answers: number;
+  total_questions: number;
+  score_percentage: number;
+  finished_at: string;
+  mode: string;
+}
+
 export default function HistoricoWrapper() {
   return (
     <Suspense fallback={
       <div className="min-h-screen flex items-center justify-center bg-slate-50">
-        <div className="w-12 h-12 border-4 border-emerald-600/20 border-t-emerald-600 rounded-full animate-spin" />
+        <div className="w-12 h-12 border-4 border-indigo-600/20 border-t-indigo-600 rounded-full animate-spin" />
       </div>
     }>
       <HistoricoPage />
@@ -36,14 +47,29 @@ export default function HistoricoWrapper() {
 function HistoricoPage() {
   const [fase2History, setFase2History] = useState<Fase2HistoryItem[]>([]);
   const [fase1History, setFase1History] = useState<Fase1HistoryItem[]>([]);
+  const [simuladoHistory, setSimuladoHistory] = useState<SimuladoHistoryItem[]>([]);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<"fase2" | "fase1">("fase2");
+  const [activeTab, setActiveTab] = useState<"fase2" | "fase1" | "simulado">("fase2");
   const router = useRouter();
   const searchParams = useSearchParams();
 
+  const [modalConfig, setModalConfig] = useState<{
+    isOpen: boolean;
+    title: string;
+    message: string;
+    onConfirm: () => void;
+    type: "danger" | "info" | "success" | "warning";
+  }>({
+    isOpen: false,
+    title: "",
+    message: "",
+    onConfirm: () => {},
+    type: "info"
+  });
+
   useEffect(() => {
-    const tab = searchParams.get("tab");
-    if (tab === "fase1" || tab === "fase2") {
+    const tab = searchParams.get("tab") as any;
+    if (tab === "fase1" || tab === "fase2" || tab === "simulado") {
       setActiveTab(tab);
     }
   }, [searchParams]);
@@ -55,12 +81,14 @@ function HistoricoPage() {
       setLoading(true);
       
       try {
-        const [res2, res1] = await Promise.all([
+        const [res2, res1, resSim] = await Promise.all([
           api.get("/history"),
-          api.get("/fase1/history")
+          api.get("/fase1/history"),
+          api.get("/simulado/history")
         ]);
         setFase2History(res2.data.history);
         setFase1History(res1.data.history);
+        setSimuladoHistory(resSim.data.history);
       } catch (err) {
         console.error("Error loading history", err);
       } finally {
@@ -71,86 +99,200 @@ function HistoricoPage() {
     loadHistory();
   }, []);
 
+  const handleDeleteFase2 = (sessionId: string) => {
+    setModalConfig({
+      isOpen: true,
+      title: "Excluir Simulação",
+      message: "Tem certeza que deseja apagar este registro de simulação prática? Esta ação é permanente.",
+      type: "danger",
+      onConfirm: async () => {
+        try {
+          await api.delete(`/sessions/${sessionId}`);
+          setFase2History(fase2History.filter(h => h.session_id !== sessionId));
+        } catch (err) {
+          console.error("Erro ao excluir", err);
+        }
+      }
+    });
+  };
+
+  const handleDeleteFase1 = (sessionId: string) => {
+    setModalConfig({
+      isOpen: true,
+      title: "Excluir Tutoria",
+      message: "Tem certeza que deseja apagar este registro de tutoria teórica?",
+      type: "danger",
+      onConfirm: async () => {
+        try {
+          await api.delete(`/fase1/sessions/${sessionId}`);
+          setFase1History(fase1History.filter(h => h.session_id !== sessionId));
+        } catch (err) {
+          console.error("Erro ao excluir", err);
+        }
+      }
+    });
+  };
+
+  const handleDeleteSimulado = (sessionId: string) => {
+    setModalConfig({
+      isOpen: true,
+      title: "Excluir Resultado",
+      message: "Tem certeza que deseja apagar este resultado de simulado? Seus pontos não serão removidos, mas o registro sumirá do histórico.",
+      type: "danger",
+      onConfirm: async () => {
+        try {
+          await api.delete(`/simulado/sessions/${sessionId}`);
+          setSimuladoHistory(simuladoHistory.filter(h => h.session_id !== sessionId));
+        } catch (err) {
+          console.error("Erro ao excluir", err);
+        }
+      }
+    });
+  };
+
   return (
     <div className="min-h-screen bg-slate-50 p-8 font-sans">
-      <div className="max-w-4xl mx-auto">
+      <div className="max-w-5xl mx-auto">
         <header className="mb-10">
           <button 
              onClick={() => router.push("/")}
-             className="flex items-center gap-2 text-slate-500 hover:text-blue-600 font-medium mb-6 transition-colors"
+             className="flex items-center gap-2 text-slate-500 hover:text-indigo-600 font-bold mb-6 transition-all group"
           >
-             <ArrowLeft className="w-5 h-5" />
-             Voltar para Início
+             <ArrowLeft className="w-5 h-5 group-hover:-translate-x-1 transition-transform" />
+             Voltar ao Dashboard
           </button>
-          <div className="flex items-center gap-4">
-             <div className="bg-emerald-600 p-3 rounded-2xl shadow-lg shadow-emerald-200 shrink-0">
+          <div className="flex items-center gap-6">
+             <div className="bg-indigo-600 p-4 rounded-3xl shadow-xl shadow-indigo-100 shrink-0">
                 <FileText className="w-8 h-8 text-white" />
              </div>
              <div>
-                <h1 className="text-3xl font-extrabold text-slate-800 tracking-tight">Histórico de Atividades</h1>
-                <p className="text-slate-500 mt-1 font-medium">Reveja suas simulações e tutorias teóricas passadas.</p>
+                <h1 className="text-4xl font-black text-slate-900 tracking-tight">Histórico de Atividades</h1>
+                <p className="text-slate-500 mt-1 font-medium">Acompanhe seu progresso e revise seu desempenho.</p>
              </div>
           </div>
         </header>
 
         {/* Tab Selection */}
-        <div className="flex space-x-1 p-1 bg-slate-200/60 rounded-xl mb-8">
+        <div className="flex space-x-2 p-1.5 bg-slate-200/50 rounded-[1.5rem] mb-10">
             <button
                onClick={() => setActiveTab("fase2")}
-               className={`flex-1 flex items-center justify-center gap-2 py-3 px-4 font-bold rounded-lg transition-all ${
+               className={`flex-1 flex items-center justify-center gap-2 py-4 px-4 font-black text-sm uppercase tracking-widest rounded-2xl transition-all ${
                    activeTab === "fase2" 
-                      ? "bg-white text-emerald-700 shadow-sm" 
-                      : "text-slate-500 hover:text-slate-700 hover:bg-slate-200"
+                      ? "bg-white text-emerald-600 shadow-xl shadow-slate-200/50" 
+                      : "text-slate-400 hover:text-slate-600 hover:bg-slate-200/50"
                }`}
             >
-               <Stethoscope className="w-5 h-5" /> Simulados OSCE (Fase 2)
+               <Stethoscope className="w-5 h-5" /> Prática (Fase 2)
+            </button>
+            <button
+               onClick={() => setActiveTab("simulado")}
+               className={`flex-1 flex items-center justify-center gap-2 py-4 px-4 font-black text-sm uppercase tracking-widest rounded-2xl transition-all ${
+                   activeTab === "simulado" 
+                      ? "bg-white text-indigo-600 shadow-xl shadow-slate-200/50" 
+                      : "text-slate-400 hover:text-slate-600 hover:bg-slate-200/50"
+               }`}
+            >
+               <BookOpen className="w-5 h-5" /> Questões (Fase 1)
             </button>
             <button
                onClick={() => setActiveTab("fase1")}
-               className={`flex-1 flex items-center justify-center gap-2 py-3 px-4 font-bold rounded-lg transition-all ${
+               className={`flex-1 flex items-center justify-center gap-2 py-4 px-4 font-black text-sm uppercase tracking-widest rounded-2xl transition-all ${
                    activeTab === "fase1" 
-                      ? "bg-white text-blue-700 shadow-sm" 
-                      : "text-slate-500 hover:text-slate-700 hover:bg-slate-200"
+                      ? "bg-white text-violet-600 shadow-xl shadow-slate-200/50" 
+                      : "text-slate-400 hover:text-slate-600 hover:bg-slate-200/50"
                }`}
             >
-               <BookOpen className="w-5 h-5" /> Tutorias Teóricas (Fase 1)
+               <Activity className="w-5 h-5" /> Tutorias (Fase 1)
             </button>
         </div>
 
         {loading ? (
            <div className="flex justify-center py-20">
-             <Activity className="w-10 h-10 text-slate-400 animate-spin" />
+             <div className="w-12 h-12 border-4 border-indigo-600/20 border-t-indigo-600 rounded-full animate-spin" />
            </div>
         ) : activeTab === "fase2" ? (
             /* FASE 2 LIST */
             fase2History.length === 0 ? (
-               <div className="text-center py-16 px-6 bg-white rounded-2xl shadow-sm border border-dashed border-slate-300">
-                  <FileText className="w-12 h-12 text-slate-300 mx-auto mb-4" />
-                  <h3 className="text-lg font-bold text-slate-700">Nenhuma simulação encontrada</h3>
+               <div className="text-center py-24 px-6 bg-white rounded-[3rem] border-2 border-dashed border-slate-200">
+                  <Stethoscope className="w-16 h-16 text-slate-200 mx-auto mb-6" />
+                  <h3 className="text-xl font-black text-slate-400 uppercase tracking-widest">Nenhuma simulação prática encontrada</h3>
                </div>
             ) : (
-               <div className="flex flex-col gap-4 animate-in fade-in slide-in-from-bottom-4 duration-300">
+               <div className="flex flex-col gap-5 animate-in fade-in slide-in-from-bottom-8 duration-500">
                   {fase2History.map(item => (
-                     <div key={item.session_id} className="bg-white rounded-2xl p-6 shadow-sm border border-slate-200 hover:shadow-md transition-all group flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-                        <div>
-                           <div className="flex items-center gap-2 mb-2">
-                              <span className="bg-slate-100 text-slate-600 text-xs font-bold px-2 py-1 rounded-md">{item.case_category}</span>
+                     <div key={item.session_id} className="bg-white rounded-[2.5rem] p-8 shadow-sm border border-slate-100 hover:shadow-xl hover:-translate-y-1 transition-all group flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
+                        <div className="flex-1 space-y-3">
+                           <div className="flex items-center gap-3">
+                              <span className="bg-emerald-50 text-emerald-600 text-[10px] font-black uppercase tracking-[0.2em] px-3 py-1 rounded-lg border border-emerald-100">{item.case_category}</span>
                               {item.has_feedback ? (
-                                 <span className="bg-emerald-100 text-emerald-700 text-xs font-bold px-2 py-1 rounded-md">Feedback Gerado</span>
+                                 <span className="bg-indigo-50 text-indigo-600 text-[10px] font-black uppercase tracking-[0.2em] px-3 py-1 rounded-lg border border-indigo-100">Relatório Pronto</span>
                               ) : (
-                                 <span className="bg-amber-100 text-amber-700 text-xs font-bold px-2 py-1 rounded-md">Análise Pendente</span>
+                                 <span className="bg-amber-50 text-amber-600 text-[10px] font-black uppercase tracking-[0.2em] px-3 py-1 rounded-lg border border-amber-100">Análise Pendente</span>
                               )}
                            </div>
-                           <h3 className="text-xl font-bold text-slate-800 transition-colors">{item.case_title}</h3>
-                           <p className="text-slate-500 text-sm mt-1">Trocas de mensagens: {Math.floor(item.turns_count / 2)}</p>
+                           <h3 className="text-2xl font-black text-slate-800 tracking-tight">{item.case_title}</h3>
+                           <div className="flex items-center gap-4 text-slate-400 text-sm font-medium">
+                              <span>Interações: {Math.floor(item.turns_count / 2)}</span>
+                           </div>
                         </div>
                         
-                        <div className="flex items-center shrink-0 gap-3 w-full md:w-auto mt-4 md:mt-0">
-                           <button onClick={() => router.push(`/simulacao/${item.session_id}`)} className="flex-1 md:flex-none flex items-center justify-center gap-2 text-blue-600 font-semibold bg-blue-50 px-4 py-2 rounded-xl hover:bg-blue-600 hover:text-white transition-all text-sm">
-                              Ver/Continuar Consulta
+                        <div className="flex items-center shrink-0 gap-4 w-full md:w-auto">
+                           <button 
+                             onClick={() => handleDeleteFase2(item.session_id)}
+                             className="p-4 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-2xl transition-all"
+                             title="Excluir"
+                           >
+                             <Trash2 size={22} />
                            </button>
-                           <button onClick={() => router.push(`/feedback/${item.session_id}`)} className="flex-1 md:flex-none flex items-center justify-center gap-2 text-emerald-600 font-semibold bg-emerald-50 px-4 py-2 rounded-xl hover:bg-emerald-600 hover:text-white transition-all text-sm">
-                              Ler Relatório <ArrowRight className="w-4 h-4" />
+                           <button onClick={() => router.push(`/feedback/${item.session_id}`)} className="flex-1 md:flex-none flex items-center justify-center gap-2 bg-slate-900 text-white font-black px-8 py-4 rounded-2xl hover:bg-black transition-all shadow-lg shadow-slate-200">
+                               Ver Desempenho <ArrowRight className="w-5 h-5" />
+                           </button>
+                        </div>
+                     </div>
+                  ))}
+               </div>
+            )
+        ) : activeTab === "simulado" ? (
+            /* SIMULADO LIST */
+            simuladoHistory.length === 0 ? (
+               <div className="text-center py-24 px-6 bg-white rounded-[3rem] border-2 border-dashed border-slate-200">
+                  <BookOpen className="w-16 h-16 text-slate-200 mx-auto mb-6" />
+                  <h3 className="text-xl font-black text-slate-400 uppercase tracking-widest">Nenhum simulado concluído</h3>
+               </div>
+            ) : (
+               <div className="flex flex-col gap-5 animate-in fade-in slide-in-from-bottom-8 duration-500">
+                  {simuladoHistory.map(item => (
+                     <div key={item.session_id} className="bg-white rounded-[2.5rem] p-8 shadow-sm border border-slate-100 hover:shadow-xl hover:-translate-y-1 transition-all group flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
+                        <div className="flex-1 space-y-3">
+                           <div className="flex items-center gap-3">
+                              <span className="bg-indigo-50 text-indigo-600 text-[10px] font-black uppercase tracking-[0.2em] px-3 py-1 rounded-lg border border-indigo-100">Fase 1</span>
+                              <span className={`text-[10px] font-black uppercase tracking-[0.2em] px-3 py-1 rounded-lg border ${
+                                item.score_percentage >= 70 ? "bg-emerald-50 text-emerald-600 border-emerald-100" :
+                                item.score_percentage >= 50 ? "bg-amber-50 text-amber-600 border-amber-100" : "bg-red-50 text-red-600 border-red-100"
+                              }`}>
+                                {item.score_percentage}% Acertos
+                              </span>
+                           </div>
+                           <h3 className="text-2xl font-black text-slate-800 tracking-tight">{item.title}</h3>
+                           <div className="flex items-center gap-4 text-slate-400 text-sm font-medium">
+                              <span>{item.correct_answers} de {item.total_questions} questões</span>
+                              <span>•</span>
+                              <span>Modo {item.mode === "treino" ? "Treino" : "Exame"}</span>
+                              <span>•</span>
+                              <span>{new Date(item.finished_at).toLocaleDateString('pt-BR')}</span>
+                           </div>
+                        </div>
+                        
+                        <div className="flex items-center shrink-0 gap-4 w-full md:w-auto">
+                           <button 
+                             onClick={() => handleDeleteSimulado(item.session_id)}
+                             className="p-4 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-2xl transition-all"
+                             title="Excluir"
+                           >
+                             <Trash2 size={22} />
+                           </button>
+                           <button onClick={() => router.push(`/fase1/simulado/questoes?session_id=${item.session_id}`)} className="flex-1 md:flex-none flex items-center justify-center gap-2 bg-indigo-600 text-white font-black px-8 py-4 rounded-2xl hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-100">
+                               Ver Resultados <ArrowRight className="w-5 h-5" />
                            </button>
                         </div>
                      </div>
@@ -158,27 +300,34 @@ function HistoricoPage() {
                </div>
             )
         ) : (
-            /* FASE 1 LIST */
+            /* FASE 1 CHAT LIST */
             fase1History.length === 0 ? (
-               <div className="text-center py-16 px-6 bg-white rounded-2xl shadow-sm border border-dashed border-slate-300">
-                  <BookOpen className="w-12 h-12 text-slate-300 mx-auto mb-4" />
-                  <h3 className="text-lg font-bold text-slate-700">Nenhuma tutoria encontrada</h3>
+               <div className="text-center py-24 px-6 bg-white rounded-[3rem] border-2 border-dashed border-slate-200">
+                  <Activity className="w-16 h-16 text-slate-200 mx-auto mb-6" />
+                  <h3 className="text-xl font-black text-slate-400 uppercase tracking-widest">Nenhuma tutoria iniciada</h3>
                </div>
             ) : (
-               <div className="flex flex-col gap-4 animate-in fade-in slide-in-from-bottom-4 duration-300">
+               <div className="flex flex-col gap-5 animate-in fade-in slide-in-from-bottom-8 duration-500">
                   {fase1History.map(item => (
-                     <div key={item.session_id} className="bg-white rounded-2xl p-6 shadow-sm border border-slate-200 hover:shadow-md transition-all flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-                        <div>
-                           <div className="flex items-center gap-2 mb-2">
-                              <span className="bg-blue-100 text-blue-700 text-xs font-bold px-2 py-1 rounded-md">Tutoria Teórica</span>
+                     <div key={item.session_id} className="bg-white rounded-[2.5rem] p-8 shadow-sm border border-slate-100 hover:shadow-xl hover:-translate-y-1 transition-all flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
+                        <div className="flex-1 space-y-3">
+                           <div className="flex items-center gap-3">
+                              <span className="bg-violet-50 text-violet-600 text-[10px] font-black uppercase tracking-[0.2em] px-3 py-1 rounded-lg border border-violet-100">Preceptor IA</span>
                            </div>
-                           <h3 className="text-xl font-bold text-slate-800 transition-colors line-clamp-2 max-w-full lg:max-w-[400px]">{item.title}</h3>
-                           <p className="text-slate-500 text-sm mt-1">Trocas de mensagens: {Math.floor(item.turns_count / 2)}</p>
+                           <h3 className="text-2xl font-black text-slate-800 tracking-tight line-clamp-1">{item.title}</h3>
+                           <p className="text-slate-400 text-sm font-medium">Interações: {Math.floor(item.turns_count / 2)}</p>
                         </div>
                         
-                        <div className="flex items-center shrink-0 w-full md:w-auto mt-4 md:mt-0">
-                           <button onClick={() => router.push(`/fase1/${item.session_id}`)} className="w-full flex items-center justify-center gap-2 text-blue-600 font-semibold bg-blue-50 px-6 py-3 rounded-xl hover:bg-blue-600 hover:text-white transition-all text-sm">
-                              Reabrir Lousa <ArrowRight className="w-4 h-4" />
+                        <div className="flex items-center shrink-0 gap-4 w-full md:w-auto">
+                           <button 
+                             onClick={() => handleDeleteFase1(item.session_id)}
+                             className="p-4 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-2xl transition-all"
+                             title="Excluir"
+                           >
+                             <Trash2 size={22} />
+                           </button>
+                           <button onClick={() => router.push(`/fase1/${item.session_id}`)} className="flex-1 md:flex-none flex items-center justify-center gap-2 bg-violet-600 text-white font-black px-8 py-4 rounded-2xl hover:bg-violet-700 transition-all shadow-lg shadow-violet-100">
+                               Abrir Lousa <ArrowRight className="w-5 h-5" />
                            </button>
                         </div>
                      </div>
@@ -187,6 +336,17 @@ function HistoricoPage() {
             )
         )}
       </div>
+
+      <ConfirmModal 
+        isOpen={modalConfig.isOpen}
+        title={modalConfig.title}
+        message={modalConfig.message}
+        type={modalConfig.type}
+        onClose={() => setModalConfig({ ...modalConfig, isOpen: false })}
+        onConfirm={modalConfig.onConfirm}
+        confirmText="Confirmar Exclusão"
+        cancelText="Voltar"
+      />
     </div>
   );
 }

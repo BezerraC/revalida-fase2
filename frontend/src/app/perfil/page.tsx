@@ -12,22 +12,27 @@ import {
   ArrowLeft, 
   Activity, 
   Settings, 
-  UserCircle, 
   History, 
   BookOpen, 
   Stethoscope, 
   ArrowRight, 
   Key, 
   ExternalLink, 
+  ChevronRight,
   CheckCircle, 
   X, 
   Save,
   Target,
   Clock,
-  Play
+  Play,
+  Sparkles,
+  Trash2,
+  Camera,
+  Trophy
 } from "lucide-react";
 import Link from "next/link";
 import api from "@/lib/api";
+import ConfirmModal from "@/components/ConfirmModal";
 
 interface SimuladoSession {
     _id: string;
@@ -57,6 +62,21 @@ export default function ProfilePage() {
   const [editEmail, setEditEmail] = useState("");
   const [isUpdatingProfile, setIsUpdatingProfile] = useState(false);
   const [updateError, setUpdateError] = useState("");
+  const [isUploadingImage, setIsUploadingImage] = useState(false);
+
+  const [modalConfig, setModalConfig] = useState<{
+    isOpen: boolean;
+    title: string;
+    message: string;
+    onConfirm: () => void;
+    type: "danger" | "info" | "success" | "warning";
+  }>({
+    isOpen: false,
+    title: "",
+    message: "",
+    onConfirm: () => {},
+    type: "info"
+  });
 
   useEffect(() => {
     if (user) {
@@ -80,8 +100,8 @@ export default function ProfilePage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-slate-50">
-        <div className="w-12 h-12 border-4 border-blue-600/20 border-t-blue-600 rounded-full animate-spin" />
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <Activity className="w-12 h-12 text-indigo-600 animate-spin" />
       </div>
     );
   }
@@ -101,7 +121,6 @@ export default function ProfilePage() {
       setTimeout(() => setSaveKeySuccess(false), 3000);
     } catch (error) {
       console.error("Erro ao salvar chave:", error);
-      alert("Erro ao salvar a chave. Tente novamente.");
     } finally {
       setIsSavingKey(false);
     }
@@ -120,7 +139,7 @@ export default function ProfilePage() {
       setIsEditModalOpen(false);
     } catch (error: any) {
       console.error("Erro ao atualizar perfil:", error);
-      setUpdateError(error.response?.data?.detail || "Erro ao atualizar perfil. Tente novamente.");
+      setUpdateError(error.response?.data?.detail || "Erro ao atualizar perfil.");
     } finally {
       setIsUpdatingProfile(false);
     }
@@ -142,308 +161,363 @@ export default function ProfilePage() {
       router.push(url);
   };
 
-  return (
-    <div className="min-h-screen bg-slate-50 p-6 sm:p-12 font-sans bg-[grid-slate-200_1px_1px] bg-[size:32px_32px]">
-      <div className="max-w-3xl mx-auto">
-        {/* Navigation Header */}
-        <div className="mb-8 flex items-center justify-between">
-          <Link
-            href="/"
-            className="group flex items-center gap-2 text-slate-500 hover:text-slate-800 font-bold transition-all"
-          >
-            <div className="p-2 bg-white rounded-xl shadow-sm border border-slate-200 group-hover:shadow-md transition-all">
-              <ArrowLeft className="w-5 h-5" />
-            </div>
-            Voltar ao Dashboard
-          </Link>
-          <div className="flex items-center gap-2 bg-blue-50 text-blue-600 px-4 py-2 rounded-2xl font-bold border border-blue-100">
-            <UserCircle className="w-5 h-5" />
-            Perfil do Usuário
-          </div>
-        </div>
+  const handleDeleteSession = (sessionId: string) => {
+    setModalConfig({
+      isOpen: true,
+      title: "Excluir Progresso",
+      message: "Tem certeza que deseja excluir este simulado em progresso? Esta ação não pode ser desfeita.",
+      type: "danger",
+      onConfirm: async () => {
+        try {
+          await api.delete(`/simulado/sessions/${sessionId}`);
+          setActiveSessions(activeSessions.filter(s => s._id !== sessionId));
+        } catch (err) {
+          console.error("Erro ao excluir sessão:", err);
+        }
+      }
+    });
+  };
 
-        {/* Main Profile Card */}
-        <div className="bg-white rounded-[2.5rem] shadow-2xl shadow-slate-200 border border-slate-100 overflow-hidden mb-8">
-          <div className="h-32 bg-gradient-to-r from-blue-600 to-indigo-700 relative">
-             <div className="absolute -bottom-16 left-10 p-2 bg-white rounded-[2rem] shadow-xl">
-                <div className="w-32 h-32 bg-slate-100 rounded-[1.5rem] flex items-center justify-center border-4 border-white overflow-hidden text-slate-400">
-                   <User className="w-16 h-16" />
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const formData = new FormData();
+    formData.append("file", file);
+
+    setIsUploadingImage(true);
+    try {
+      await api.post("/auth/profile/image", formData, {
+        headers: { "Content-Type": "multipart/form-data" },
+      });
+      await refreshUser();
+    } catch (err) {
+      console.error("Erro ao fazer upload da imagem:", err);
+      alert("Erro ao enviar imagem. Verifique o formato.");
+    } finally {
+      setIsUploadingImage(false);
+    }
+  };
+
+  return (
+    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-12 space-y-8">
+      {/* Breadcrumb / Navigation */}
+      <nav className="flex items-center justify-between">
+        <Link
+          href="/"
+          className="flex items-center gap-2 text-gray-500 hover:text-indigo-600 font-bold transition-all group"
+        >
+          <ArrowLeft className="w-5 h-5 group-hover:-translate-x-1 transition-transform" />
+          Voltar ao Dashboard
+        </Link>
+        <div className="hidden md:flex items-center gap-2 text-xs font-black uppercase tracking-widest text-gray-400">
+          Minha Conta <ChevronRight size={14} /> Perfil
+        </div>
+      </nav>
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        {/* Left Column: Personal Info Card */}
+        <div className="lg:col-span-1 space-y-8">
+          <div className="bg-white rounded-[2.5rem] shadow-xl border border-gray-100 overflow-hidden">
+            <div className="h-24 bg-gradient-to-br from-indigo-600 via-indigo-700 to-violet-800" />
+            <div className="px-8 pb-8">
+              <div className="relative -mt-12 mb-6">
+                <div className="relative w-24 h-24 bg-white rounded-3xl shadow-xl flex items-center justify-center p-1 group overflow-hidden">
+                  <div className="w-full h-full bg-indigo-50 rounded-2xl flex items-center justify-center text-indigo-600 overflow-hidden relative">
+                    {user.profile_image ? (
+                      <img 
+                        src={`http://localhost:8000${user.profile_image}`} 
+                        alt={user.full_name} 
+                        className="w-full h-full object-cover"
+                      />
+                    ) : (
+                      <User size={40} />
+                    )}
+                    
+                    {/* Upload Overlay */}
+                    <label 
+                      className={`absolute inset-0 bg-black/40 flex items-center justify-center cursor-pointer opacity-0 group-hover:opacity-100 transition-opacity ${isUploadingImage ? 'opacity-100 cursor-wait' : ''}`}
+                    >
+                      <input 
+                        type="file" 
+                        className="hidden" 
+                        accept="image/*"
+                        onChange={handleImageUpload}
+                        disabled={isUploadingImage}
+                      />
+                      {isUploadingImage ? (
+                        <Activity className="w-6 h-6 text-white animate-spin" />
+                      ) : (
+                        <Camera className="w-6 h-6 text-white" />
+                      )}
+                    </label>
+                  </div>
                 </div>
-             </div>
-          </div>
-          
-          <div className="pt-20 px-10 pb-10">
-            <div className="flex items-start justify-between">
-              <div>
-                <h1 className="text-3xl font-black text-slate-800">{user.full_name}</h1>
-                <p className="text-slate-500 font-medium flex items-center gap-2 mt-1">
-                  <Mail className="w-4 h-4" />
+              </div>
+              
+              <div className="space-y-1 mb-8">
+                <h1 className="text-2xl font-black text-gray-900 leading-tight">{user.full_name}</h1>
+                <p className="text-gray-500 font-medium text-sm flex items-center gap-2">
+                  <Mail className="w-4 h-4 opacity-70" />
                   {user.email}
                 </p>
               </div>
-              <div className="flex flex-col items-end gap-2">
-                <span className={`px-4 py-1.5 rounded-full text-xs font-black uppercase tracking-wider border shadow-sm ${
-                  user.role === 'admin' 
-                    ? 'bg-amber-50 text-amber-600 border-amber-100 shadow-amber-100/50' 
-                    : 'bg-blue-50 text-blue-600 border-blue-100 shadow-blue-100/50'
-                }`}>
-                  {user.role === 'admin' ? 'Administrador' : 'Estudante'}
-                </span>
-                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Tipo de Conta</span>
-              </div>
-            </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-12">
-              <div className="flex items-center gap-4 p-5 bg-slate-50 rounded-3xl border border-slate-100 hover:border-blue-200 transition-all group">
-                <div className="p-3 bg-white rounded-2xl shadow-sm text-slate-400 group-hover:text-blue-600 transition-colors">
-                  <Calendar className="w-6 h-6" />
+              <div className="space-y-4 pt-6 border-t border-gray-50">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">Acesso</span>
+                  <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest ${
+                    user.role === 'admin' ? 'bg-amber-100 text-amber-700' : 'bg-indigo-100 text-indigo-700'
+                  }`}>
+                    {user.role === 'admin' ? 'Admin' : 'Estudante'}
+                  </span>
                 </div>
-                <div>
-                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Membro desde</p>
-                  <p className="text-slate-700 font-bold">{formatDate(user.created_at)}</p>
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">Membro desde</span>
+                  <span className="text-sm font-bold text-gray-700">{formatDate(user.created_at)}</span>
                 </div>
               </div>
 
-              <div className="flex items-center gap-4 p-5 bg-slate-50 rounded-3xl border border-slate-100 hover:border-blue-200 transition-all group">
-                 <div className="p-3 bg-white rounded-2xl shadow-sm text-slate-400 group-hover:text-emerald-500 transition-colors">
-                  <Shield className="w-6 h-6" />
-                </div>
-                <div>
-                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Status da Conta</p>
-                  <p className="text-emerald-600 font-black">Ativa e Segura</p>
-                </div>
-              </div>
-            </div>
-
-            {/* AI Config Section */}
-            <div className="mt-12 p-8 bg-slate-900 rounded-[2rem] text-white overflow-hidden relative group">
-              <div className="absolute top-0 right-0 w-32 h-32 bg-blue-600/20 blur-3xl group-hover:bg-blue-600/30 transition-all"></div>
-              <div className="relative z-10">
-                <div className="flex items-center justify-between mb-6">
-                  <h3 className="text-xl font-black flex items-center gap-3">
-                    <Key className="w-6 h-6 text-blue-400" />
-                    Chave de API do Gemini
-                  </h3>
-                   <a 
-                    href="https://aistudio.google.com/app/apikey" 
-                    target="_blank" 
-                    rel="noopener noreferrer"
-                    className="flex items-center gap-2 text-xs font-bold text-blue-400 hover:text-blue-300 transition-colors bg-blue-400/10 px-3 py-1.5 rounded-full border border-blue-400/20"
-                  >
-                    <ExternalLink className="w-3 h-3" />
-                    Ver Tutorial
-                  </a>
-                </div>
-                <p className="text-slate-400 text-sm mb-6 leading-relaxed">
-                  Para utilizar a Plataforma, você deve configurar sua própria chave de API. <br/>
-                  <span className="text-amber-400/80 font-bold italic text-xs">O sistema não funcionará sem uma chave configurada.</span>
-                </p>
-                
-                <div className="flex flex-col sm:flex-row gap-3">
-                  <div className="flex-1 relative">
-                    <input 
-                      type="password"
-                      value={apiKey}
-                      onChange={(e) => setApiKey(e.target.value)}
-                      placeholder="Cole sua chave aqui (ex: AIza...)"
-                      className="w-full bg-slate-800 border border-slate-700 text-white px-6 py-4 rounded-2xl focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all font-mono text-sm"
-                    />
-                    {saveKeySuccess && (
-                      <div className="absolute right-4 top-1/2 -translate-y-1/2 text-emerald-400 animate-in fade-in zoom-in duration-300">
-                        <CheckCircle className="w-5 h-5" />
-                      </div>
-                    )}
-                  </div>
-                  <button 
-                    onClick={handleSaveApiKey}
-                    disabled={isSavingKey}
-                    className="bg-blue-600 hover:bg-blue-500 disabled:bg-slate-700 text-white px-8 py-4 rounded-2xl font-black transition-all active:scale-95 shadow-lg shadow-blue-900/20 shrink-0"
-                  >
-                    {isSavingKey ? "Salvando..." : saveKeySuccess ? "Salvo!" : "Salvar Chave"}
-                  </button>
-                </div>
-              </div>
-            </div>
-
-            {/* Active Simulations Section */}
-            {activeSessions.length > 0 && (
-                <div className="mt-12 space-y-6">
-                    <h3 className="text-lg font-black text-slate-800 flex items-center gap-2">
-                        <Clock className="w-5 h-5 text-indigo-600" />
-                        Simulados em Andamento
-                    </h3>
-                    <div className="space-y-4">
-                        {activeSessions.map((session) => {
-                            const answered = Object.keys(session.answers || {}).length;
-                            return (
-                                <div 
-                                    key={session._id}
-                                    className="flex items-center justify-between p-6 bg-slate-50 border border-slate-100 rounded-3xl hover:bg-white hover:shadow-xl hover:shadow-slate-200/50 transition-all group"
-                                >
-                                    <div className="flex items-center gap-4">
-                                        <div className="w-14 h-14 bg-white rounded-2xl shadow-sm flex items-center justify-center text-indigo-600">
-                                            <Target className="w-7 h-7" />
-                                        </div>
-                                        <div>
-                                            <p className="font-black text-slate-800">
-                                                {session.exam_id ? session.exam_id.replace('_', ' ') : session.theme}
-                                            </p>
-                                            <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mt-1">
-                                                {answered} Questões respondidas &bull; {session.mode}
-                                            </p>
-                                        </div>
-                                    </div>
-                                    <button 
-                                        onClick={() => handleResume(session)}
-                                        className="bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-3 rounded-xl font-black text-xs uppercase tracking-widest flex items-center gap-2 transition-all active:scale-95"
-                                    >
-                                        Retomar <Play className="w-3 h-3 fill-current" />
-                                    </button>
-                                </div>
-                            );
-                        })}
-                    </div>
-                </div>
-            )}
-
-            {/* History Section */}
-            <div className="mt-12">
-              <h3 className="text-lg font-black text-slate-800 mb-4 flex items-center gap-2">
-                <History className="w-5 h-5 text-blue-600" />
-                Histórico de Atividades
-              </h3>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <Link 
-                  href="/historico?tab=fase2"
-                  className="flex items-center justify-between p-6 bg-white border-2 border-slate-100 rounded-3xl hover:border-blue-600 hover:shadow-xl hover:shadow-blue-100 transition-all group"
-                >
-                  <div className="flex items-center gap-4">
-                    <div className="p-3 bg-blue-50 text-blue-600 rounded-2xl group-hover:scale-110 transition-transform">
-                      <Stethoscope className="w-6 h-6" />
-                    </div>
-                    <div className="text-left">
-                      <p className="text-sm font-black text-slate-800">Simulações Práticas</p>
-                      <p className="text-xs font-bold text-slate-500 italic">Fase 2</p>
-                    </div>
-                  </div>
-                  <ArrowRight className="w-5 h-5 text-slate-300 group-hover:text-blue-600 group-hover:translate-x-1 transition-all" />
-                </Link>
-
-                <Link 
-                  href="/historico?tab=fase1"
-                  className="flex items-center justify-between p-6 bg-white border-2 border-slate-100 rounded-3xl hover:border-indigo-600 hover:shadow-xl hover:shadow-indigo-100 transition-all group"
-                >
-                  <div className="flex items-center gap-4">
-                    <div className="p-3 bg-indigo-50 text-indigo-600 rounded-2xl group-hover:scale-110 transition-transform">
-                      <BookOpen className="w-6 h-6" />
-                    </div>
-                    <div className="text-left">
-                      <p className="text-sm font-black text-slate-800">Questões Teóricas</p>
-                      <p className="text-xs font-bold text-slate-500 italic">Fase 1</p>
-                    </div>
-                  </div>
-                  <ArrowRight className="w-5 h-5 text-slate-300 group-hover:text-indigo-600 group-hover:translate-x-1 transition-all" />
-                </Link>
-              </div>
-            </div>
-
-            <div className="mt-12 pt-8 border-t border-slate-50 flex flex-wrap gap-4">
-               <button 
+              <button 
                 onClick={() => setIsEditModalOpen(true)}
-                className="flex items-center gap-2 bg-slate-800 hover:bg-slate-900 text-white px-6 py-4 rounded-2xl font-bold transition-all active:scale-95 shadow-lg shadow-slate-200"
-               >
-                  <Settings className="w-5 h-5" />
-                  Editar Perfil
-               </button>
-               <button 
-                  onClick={logout}
-                  className="flex items-center gap-2 bg-white hover:bg-red-50 text-red-600 px-6 py-4 rounded-2xl font-bold border border-slate-200 hover:border-red-200 transition-all active:scale-95 group shadow-sm"
-               >
-                  <LogOut className="w-5 h-5 text-red-500 group-hover:-translate-x-1 transition-transform" />
-                  Sair
-               </button>
+                className="w-full mt-8 flex items-center justify-center gap-2 bg-gray-900 text-white font-bold py-4 rounded-2xl hover:bg-gray-800 transition-all active:scale-95 shadow-lg"
+              >
+                <Settings size={18} />
+                Editar Informações
+              </button>
+            </div>
+          </div>
+
+          {/* Score & Level */}
+          <div className="bg-white rounded-[2.5rem] p-8 border border-gray-100 shadow-sm space-y-6">
+            <h3 className="font-black text-gray-900 flex items-center gap-2">
+              <Trophy size={20} className="text-amber-500" />
+              Desempenho
+            </h3>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="bg-amber-50 p-4 rounded-2xl border border-amber-100">
+                <p className="text-[10px] font-black text-amber-600 uppercase tracking-widest mb-1">Level</p>
+                <p className="text-2xl font-black text-amber-700">{user.level || 1}</p>
+              </div>
+              <div className="bg-indigo-50 p-4 rounded-2xl border border-indigo-100">
+                <p className="text-[10px] font-black text-indigo-600 uppercase tracking-widest mb-1">Score Total</p>
+                <p className="text-2xl font-black text-indigo-700">{user.total_score || 0}</p>
+              </div>
+            </div>
+          </div>
+
+          {/* Quick Stats in Profile */}
+          <div className="bg-white rounded-[2.5rem] p-8 border border-gray-100 shadow-sm space-y-6">
+            <h3 className="font-black text-gray-900 flex items-center gap-2">
+              <Shield size={20} className="text-indigo-600" />
+              Segurança
+            </h3>
+            <div className="space-y-4">
+              <div className="p-4 bg-emerald-50 rounded-2xl border border-emerald-100 flex items-center gap-3">
+                <CheckCircle className="text-emerald-600" size={20} />
+                <span className="text-sm font-bold text-emerald-700">Conta Verificada</span>
+              </div>
+              <div className="p-4 bg-gray-50 rounded-2xl border border-gray-100 flex items-center gap-3 grayscale opacity-60">
+                <Shield className="text-gray-400" size={20} />
+                <span className="text-sm font-bold text-gray-500">2FA Desativado</span>
+              </div>
             </div>
           </div>
         </div>
 
-        <div className="text-center px-10">
-           <div className="inline-flex items-center gap-2 text-slate-300 font-bold text-sm">
-              <Activity className="w-4 h-4" />
-              Revalida AI Pro &bull; Plataforma de Estudos Inteligente
-           </div>
+        {/* Right Column: AI Config & Activity */}
+        <div className="lg:col-span-2 space-y-8">
+          
+          {/* AI API Configuration */}
+          <section className="bg-gray-900 rounded-[2.5rem] p-8 md:p-10 text-white relative overflow-hidden group shadow-2xl">
+            <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-500/10 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2" />
+            <div className="relative z-10">
+              <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-8">
+                <div className="space-y-2">
+                  <h2 className="text-2xl font-black flex items-center gap-3">
+                    <Sparkles className="text-indigo-400" />
+                    Inteligência Artificial
+                  </h2>
+                  <p className="text-gray-400 font-medium text-sm">Configure sua chave Gemini para habilitar o Preceptor IA e as simulações.</p>
+                </div>
+                <a 
+                  href="https://aistudio.google.com/app/apikey" 
+                  target="_blank" 
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-2 text-xs font-black text-indigo-400 bg-indigo-500/10 px-4 py-2 rounded-xl border border-indigo-500/20 hover:bg-indigo-500/20 transition-all uppercase tracking-widest"
+                >
+                  <ExternalLink size={14} />
+                  Obter Chave
+                </a>
+              </div>
+
+              <div className="flex flex-col sm:flex-row gap-4">
+                <div className="flex-1 relative group">
+                  <Key className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-600 group-focus-within:text-indigo-400 transition-colors" />
+                  <input 
+                    type="password"
+                    value={apiKey}
+                    onChange={(e) => setApiKey(e.target.value)}
+                    placeholder="Sua Gemini API Key"
+                    className="w-full bg-gray-800 border border-gray-700 text-white pl-12 pr-12 py-4 rounded-2xl focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all font-mono text-sm"
+                  />
+                  {saveKeySuccess && (
+                    <CheckCircle className="absolute right-4 top-1/2 -translate-y-1/2 text-emerald-400 animate-in zoom-in" size={20} />
+                  )}
+                </div>
+                <button 
+                  onClick={handleSaveApiKey}
+                  disabled={isSavingKey}
+                  className="bg-indigo-600 hover:bg-indigo-500 disabled:bg-gray-800 text-white px-8 py-4 rounded-2xl font-black transition-all active:scale-95 shadow-lg shadow-indigo-900/40"
+                >
+                  {isSavingKey ? "Salvando..." : saveKeySuccess ? "Salvo!" : "Salvar Chave"}
+                </button>
+              </div>
+            </div>
+          </section>
+
+          {/* Active Sessions */}
+          {activeSessions.length > 0 && (
+            <section className="bg-white rounded-[2.5rem] p-8 border border-gray-100 shadow-xl overflow-hidden">
+              <h2 className="text-xl font-black text-gray-900 mb-8 flex items-center gap-3">
+                <Clock className="text-indigo-600" />
+                Sessões Ativas
+              </h2>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {activeSessions.map((session) => {
+                  const answered = Object.keys(session.answers || {}).length;
+                  return (
+                    <div 
+                      key={session._id}
+                      className="p-6 bg-gray-50 rounded-3xl border border-gray-100 hover:border-indigo-100 hover:bg-white hover:shadow-xl transition-all duration-300 group flex flex-col justify-between"
+                    >
+                      <div className="space-y-4">
+                        <div className="w-12 h-12 bg-white rounded-xl shadow-sm flex items-center justify-center text-indigo-600">
+                          <Target size={24} />
+                        </div>
+                        <div>
+                          <h4 className="font-black text-gray-900">{session.exam_id ? session.exam_id.replace('_', ' ') : session.theme}</h4>
+                          <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mt-1">
+                            {answered} Respostas &bull; {session.mode}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="mt-6 flex items-center justify-between">
+                        <button 
+                          onClick={() => handleResume(session)}
+                          className="flex items-center gap-2 text-indigo-600 font-black text-xs uppercase tracking-widest group-hover:translate-x-1 transition-transform"
+                        >
+                          Retomar <ArrowRight size={16} />
+                        </button>
+                        <button 
+                          onClick={() => handleDeleteSession(session._id)}
+                          className="p-2 text-gray-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all"
+                          title="Excluir progresso"
+                        >
+                          <Trash2 size={16} />
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </section>
+          )}
+
+          {/* Activity History Quick Links */}
+          <section className="bg-white rounded-[2.5rem] p-8 border border-gray-100 shadow-xl">
+            <h2 className="text-xl font-black text-gray-900 mb-8 flex items-center gap-3">
+              <History className="text-indigo-600" />
+              Histórico de Atividades
+            </h2>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <Link href="/historico?tab=simulado" className="group p-6 bg-indigo-50/50 rounded-3xl border border-transparent hover:border-indigo-100 hover:bg-white hover:shadow-xl transition-all flex items-center gap-4">
+                <div className="w-14 h-14 bg-white rounded-2xl shadow-sm flex items-center justify-center text-indigo-600 group-hover:scale-110 transition-transform">
+                  <BookOpen size={28} />
+                </div>
+                <div>
+                  <h4 className="font-black text-gray-900">Questões Teóricas</h4>
+                  <p className="text-xs font-bold text-indigo-400 uppercase">Fase 1</p>
+                </div>
+                <ChevronRight className="ml-auto text-indigo-200 group-hover:text-indigo-600 group-hover:translate-x-1 transition-all" />
+              </Link>
+
+              <Link href="/historico?tab=fase2" className="group p-6 bg-violet-50/50 rounded-3xl border border-transparent hover:border-violet-100 hover:bg-white hover:shadow-xl transition-all flex items-center gap-4">
+                <div className="w-14 h-14 bg-white rounded-2xl shadow-sm flex items-center justify-center text-violet-600 group-hover:scale-110 transition-transform">
+                  <Stethoscope size={28} />
+                </div>
+                <div>
+                  <h4 className="font-black text-gray-900">Simulações Práticas</h4>
+                  <p className="text-xs font-bold text-violet-400 uppercase">Fase 2</p>
+                </div>
+                <ChevronRight className="ml-auto text-violet-200 group-hover:text-violet-600 group-hover:translate-x-1 transition-all" />
+              </Link>
+            </div>
+          </section>
+
+          <button 
+            onClick={logout}
+            className="flex items-center gap-2 text-red-500 font-black text-xs uppercase tracking-widest hover:text-red-600 transition-colors py-4 px-8"
+          >
+            <LogOut size={16} />
+            Encerrar Sessão
+          </button>
         </div>
       </div>
 
       {/* Edit Profile Modal */}
       {isEditModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-md animate-in fade-in duration-300">
-          <div className="bg-white rounded-[2.5rem] shadow-2xl p-8 max-w-md w-full border border-white/20 animate-in zoom-in duration-300">
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-gray-900/60 backdrop-blur-md animate-in fade-in duration-300">
+          <div className="bg-white rounded-[2.5rem] shadow-2xl p-8 md:p-10 max-w-md w-full border border-gray-100 animate-in zoom-in duration-300">
             <div className="flex items-center justify-between mb-8">
-              <h2 className="text-2xl font-black text-slate-800">Editar Perfil</h2>
+              <h2 className="text-2xl font-black text-gray-900">Editar Perfil</h2>
               <button 
                 onClick={() => setIsEditModalOpen(false)}
-                className="p-2 bg-slate-100 hover:bg-red-50 text-slate-400 hover:text-red-500 rounded-xl transition-all"
+                className="p-2 hover:bg-gray-100 rounded-xl transition-all"
               >
-                <X className="w-5 h-5" />
+                <X className="w-5 h-5 text-gray-400" />
               </button>
             </div>
 
             <form onSubmit={handleUpdateProfile} className="space-y-6">
-              <div>
-                <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">Nome Completo</label>
-                <div className="relative">
-                  <User className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-300" />
-                  <input 
-                    type="text"
-                    required
-                    value={editName}
-                    onChange={(e) => setEditName(e.target.value)}
-                    className="w-full bg-slate-50 border border-slate-200 text-slate-800 pl-12 pr-4 py-4 rounded-2xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white transition-all font-bold"
-                    placeholder="Seu nome completo"
-                  />
-                </div>
+              <div className="space-y-2">
+                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Nome Completo</label>
+                <input 
+                  type="text"
+                  required
+                  value={editName}
+                  onChange={(e) => setEditName(e.target.value)}
+                  className="w-full bg-gray-50 border border-gray-100 text-gray-900 px-6 py-4 rounded-2xl focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:bg-white transition-all font-bold"
+                />
               </div>
 
-              <div>
-                <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">E-mail de Acesso</label>
-                <div className="relative">
-                  <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-300" />
-                  <input 
-                    type="email"
-                    required
-                    value={editEmail}
-                    onChange={(e) => setEditEmail(e.target.value)}
-                    className="w-full bg-slate-50 border border-slate-200 text-slate-800 pl-12 pr-4 py-4 rounded-2xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white transition-all font-bold"
-                    placeholder="seu@email.com"
-                  />
-                </div>
+              <div className="space-y-2">
+                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">E-mail</label>
+                <input 
+                  type="email"
+                  required
+                  value={editEmail}
+                  onChange={(e) => setEditEmail(e.target.value)}
+                  className="w-full bg-gray-50 border border-gray-100 text-gray-900 px-6 py-4 rounded-2xl focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:bg-white transition-all font-bold"
+                />
               </div>
 
               {updateError && (
-                <div className="p-4 bg-red-50 border border-red-100 text-red-600 rounded-2xl text-sm font-bold animate-in slide-in-from-top-2">
-                  {updateError}
-                </div>
+                <p className="text-red-500 text-sm font-bold bg-red-50 p-4 rounded-2xl border border-red-100">{updateError}</p>
               )}
 
               <div className="flex flex-col gap-3 pt-4">
                 <button 
                   type="submit"
                   disabled={isUpdatingProfile}
-                  className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-slate-300 text-white font-black py-4 rounded-2xl transition-all active:scale-95 shadow-lg shadow-blue-200 flex items-center justify-center gap-2"
+                  className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-black py-4 rounded-2xl transition-all shadow-lg shadow-indigo-100"
                 >
-                  {isUpdatingProfile ? (
-                    <Activity className="w-5 h-5 animate-spin" />
-                  ) : (
-                    <>
-                      <Save className="w-5 h-5" />
-                      Salvar Alterações
-                    </>
-                  )}
+                  {isUpdatingProfile ? "Salvando..." : "Salvar Alterações"}
                 </button>
                 <button 
                   type="button"
                   onClick={() => setIsEditModalOpen(false)}
-                  className="w-full bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold py-4 rounded-2xl transition-all"
+                  className="w-full bg-gray-100 hover:bg-gray-200 text-gray-600 font-bold py-4 rounded-2xl transition-all"
                 >
                   Cancelar
                 </button>
@@ -452,6 +526,17 @@ export default function ProfilePage() {
           </div>
         </div>
       )}
+
+      <ConfirmModal 
+        isOpen={modalConfig.isOpen}
+        title={modalConfig.title}
+        message={modalConfig.message}
+        type={modalConfig.type}
+        onClose={() => setModalConfig({ ...modalConfig, isOpen: false })}
+        onConfirm={modalConfig.onConfirm}
+        confirmText="Sim, Excluir"
+        cancelText="Não, Voltar"
+      />
     </div>
   );
 }

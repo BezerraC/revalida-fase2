@@ -1,156 +1,181 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import React from "react";
 import { useRouter } from "next/navigation";
-import api from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
-import { Stethoscope, Activity, ArrowRight, History, LogOut, UserCircle } from "lucide-react";
+import { 
+  BookOpen, 
+  Stethoscope, 
+  TrendingUp, 
+  Clock, 
+  CheckCircle, 
+  ChevronRight,
+  Target,
+  Activity,
+  Award
+} from "lucide-react";
 import Link from "next/link";
 
-interface CaseModel {
-  _id: string;
-  title: string;
-  category: string;
-  description: string;
-}
-
 export default function Home() {
-  const [cases, setCases] = useState<CaseModel[]>([]);
-  const [loading, setLoading] = useState(true);
   const router = useRouter();
-  const { logout, user, loading: authLoading } = useAuth();
+  const { user } = useAuth();
 
-  useEffect(() => {
-    const init = async () => {
-      try {
-        const res = await api.get("/cases");
-        setCases(res.data);
-      } catch (err) {
-        console.error("Error fetching cases", err);
-      } finally {
-        setLoading(false);
-      }
-    };
-    init();
-  }, []);
+  // Mock statistics data
+  const stats = [
+    { label: "Questões Respondidas", value: "1,240", icon: <BookOpen className="text-blue-500" />, trend: "+12% esta semana" },
+    { label: "Desempenho Geral", value: "78%", icon: <Target className="text-emerald-500" />, trend: "Top 5% dos alunos" },
+    { label: "Horas de Estudo", value: "45h", icon: <Clock className="text-amber-500" />, trend: "Meta: 50h/mês" },
+    { label: "Casos Concluídos", value: "24", icon: <CheckCircle className="text-indigo-500" />, trend: "Fase 2 Prática" },
+  ];
 
-  const handleStart = async (caseId: string) => {
-    try {
-      const res = await api.post("/sessions", { case_id: caseId });
-      router.push(`/simulacao/${res.data.session_id}`);
-    } catch (error) {
-      console.error("Failed to start session", error);
-      alert("Erro ao iniciar sessão do caso.");
-    }
-  };
-
-  const handleStartFase1 = async () => {
-    try {
-      const res = await api.post("/fase1/sessions");
-      router.push(`/fase1/${res.data.session_id}`);
-    } catch (error) {
-      console.error("Failed to start Fase 1 session", error);
-      alert("Erro ao iniciar sessão do Tutor.");
-    }
-  };
+  const recentActivity = [
+    { id: 1, title: "Simulado Revalida 2024.2", type: "Fase 1", date: "Há 2 horas", score: "82/100" },
+    { id: 2, title: "Caso Clínico: Pré-eclâmpsia", type: "Fase 2", date: "Ontem", score: "9.5/10" },
+    { id: 3, title: "Pediatria: Crescimento e Desenv.", type: "Fase 1", date: "2 dias atrás", score: "18/20" },
+  ];
 
   return (
-    <div className="min-h-screen bg-slate-50 p-8 font-sans">
-      <div className="max-w-4xl mx-auto">
-        <div className="flex justify-between items-center mb-6">
-          <div className="flex items-center gap-2">
-            {user && (
-              <span className="text-slate-500 font-medium italic">
-                Olá, <span className="text-slate-800 font-bold not-italic">{user.full_name.split(' ')[0]}</span>
-              </span>
-            )}
-          </div>
-          <div className="flex items-center gap-3">
-            <Link
-              href="/perfil"
-              className="flex items-center gap-2 bg-white text-slate-700 font-bold px-4 py-2 rounded-xl border border-slate-200 hover:shadow-md transition-all group"
-            >
-              <UserCircle className="w-5 h-5 text-blue-500 group-hover:scale-110 transition-transform" />
-              Meu Perfil
-            </Link>
-            <button 
-              onClick={logout}
-              className="flex items-center gap-2 bg-white text-slate-500 font-bold px-4 py-2 rounded-xl border border-slate-200 hover:bg-red-50 hover:text-red-600 hover:border-red-100 transition-all shadow-sm"
-            >
-              <LogOut className="w-4 h-4" />
-              Sair
-            </button>
-          </div>
-        </div>
-        <header className="mb-12 text-center">
-          <div className="flex justify-center items-center mb-4">
-            <div className="bg-blue-600 p-3 rounded-2xl shadow-lg shadow-blue-200">
-              <Stethoscope className="w-10 h-10 text-white" />
+    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-12">
+      {/* Hero Section */}
+      <section className="relative overflow-hidden rounded-[2.5rem] bg-gradient-to-br from-indigo-600 via-indigo-700 to-violet-800 p-8 md:p-12 text-white shadow-2xl">
+        <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-8">
+          <div className="max-w-2xl">
+            <h1 className="text-4xl md:text-6xl text-white font-black mb-4 leading-tight tracking-tighter">
+              Olá, Dr. {user?.full_name?.split(' ')[0] || "Médico"}!
+            </h1>
+            <p className="text-indigo-100 text-lg md:text-xl mb-8 leading-relaxed opacity-90 font-medium">
+              Sua jornada para a revalidação continua aqui. Qual fase vamos conquistar hoje?
+            </p>
+            <div className="flex flex-wrap gap-4">
+              <Link 
+                href="/fase1"
+                className="px-8 py-4 bg-white text-indigo-700 font-black rounded-2xl shadow-lg hover:shadow-white/20 hover:scale-105 transition-all duration-300 flex items-center gap-2"
+              >
+                Começar Estudos
+                <ChevronRight size={20} />
+              </Link>
             </div>
           </div>
-          <h1 className="text-4xl font-extrabold text-slate-800 tracking-tight">Revalida AI Pro</h1>
-          <p className="text-slate-500 mt-3 text-lg font-medium">Treinamento Interativo de Habilidades Clínicas</p>
-          
-          <div className="flex flex-col sm:flex-row justify-center mt-8 gap-4">
-            <button 
-               onClick={handleStartFase1}
-               className="flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold px-6 py-3 rounded-full transition-colors shadow-md hover:shadow-lg"
-            >
-               <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>
-               Estudo Teórico (Fase 1)
-            </button>
-            <button 
-               onClick={() => router.push("/historico")}
-               className="flex items-center justify-center gap-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold px-6 py-3 rounded-full transition-colors"
-            >
-               <History className="w-[18px] h-[18px]" />
-               Meu Histórico (Fase 2)
-            </button>
-          </div>
-        </header>
+        </div>
+        
+        <div className="absolute top-0 right-0 -translate-y-1/2 translate-x-1/4 w-96 h-96 bg-white/10 rounded-full blur-3xl" />
+        <div className="absolute bottom-0 left-1/2 translate-y-1/2 w-64 h-64 bg-indigo-400/20 rounded-full blur-3xl" />
+      </section>
 
-        {loading ? (
-          <div className="flex justify-center py-20">
-            <Activity className="w-10 h-10 text-blue-500 animate-pulse" />
+      {/* Main Choice Cards */}
+      <section className="grid grid-cols-1 md:grid-cols-2 gap-8">
+        {/* Fase 1 Card */}
+        <Link href="/fase1" className="group">
+          <div className="h-full bg-white rounded-[2.5rem] p-10 border border-gray-100 shadow-xl hover:shadow-2xl hover:border-indigo-100 transition-all duration-500 relative overflow-hidden">
+            <div className="w-16 h-16 bg-blue-600 text-white rounded-2xl flex items-center justify-center mb-8 group-hover:scale-110 group-hover:rotate-3 transition-transform duration-500 shadow-lg shadow-blue-100">
+              <BookOpen size={32} />
+            </div>
+            <h2 className="text-3xl font-black text-gray-900 mb-4 tracking-tight">Fase 1: Objetiva</h2>
+            <p className="text-gray-500 font-medium leading-relaxed mb-8">
+              Acesse milhares de questões classificadas, simulados oficiais e acompanhamento por tema médico.
+            </p>
+            <div className="flex items-center text-indigo-600 font-black uppercase tracking-widest text-xs">
+              Explorar Fase 1
+              <ChevronRight size={18} className="group-hover:translate-x-2 transition-transform" />
+            </div>
           </div>
-        ) : cases.length === 0 ? (
-          <div className="text-center py-12 text-slate-500 bg-white rounded-xl shadow-sm border border-dashed border-slate-300">
-            <p>Nenhum caso clínico encontrado no banco de dados.</p>
-            <p className="text-sm mt-2">Certifique-se de iniciar o backend e conectar ao MongoDB.</p>
+        </Link>
+
+        {/* Fase 2 Card */}
+        <Link href="/fase2" className="group">
+          <div className="h-full bg-white rounded-[2.5rem] p-10 border border-gray-100 shadow-xl hover:shadow-2xl hover:border-violet-100 transition-all duration-500 relative overflow-hidden">
+            <div className="w-16 h-16 bg-indigo-600 text-white rounded-2xl flex items-center justify-center mb-8 group-hover:scale-110 group-hover:-rotate-3 transition-transform duration-500 shadow-lg shadow-indigo-100">
+              <Stethoscope size={32} />
+            </div>
+            <h2 className="text-3xl font-black text-gray-900 mb-4 tracking-tight">Fase 2: Prática</h2>
+            <p className="text-gray-500 font-medium leading-relaxed mb-8">
+              Treine com casos clínicos interativos, checklists oficiais e simulações realistas de atendimento.
+            </p>
+            <div className="flex items-center text-indigo-600 font-black uppercase tracking-widest text-xs">
+              Explorar Fase 2
+              <ChevronRight size={18} className="group-hover:translate-x-2 transition-transform" />
+            </div>
           </div>
-        ) : (
-          <div className="space-y-12">
-            {Object.entries(
-              cases.reduce((acc, c) => {
-                const cat = c.category || "Geral";
-                if (!acc[cat]) acc[cat] = [];
-                acc[cat].push(c);
-                return acc;
-              }, {} as Record<string, CaseModel[]>)
-            ).map(([category, catCases]) => (
-              <div key={category}>
-                <h2 className="text-2xl font-bold text-slate-800 mb-6 border-b border-slate-200 pb-2">{category}</h2>
-                <div className="grid gap-6 md:grid-cols-2">
-                  {catCases.map((c) => (
-                    <div key={c._id} className="bg-white rounded-2xl p-6 shadow-sm border border-slate-100 hover:shadow-md transition-all group flex flex-col justify-between">
-                      <div>
-                          <h3 className="text-xl font-bold text-slate-800 mb-2">{c.title}</h3>
-                          <p className="text-slate-600 text-sm leading-relaxed mb-6">{c.description}</p>
-                      </div>
-                      <button 
-                        onClick={() => handleStart(c._id)}
-                        className="w-full flex items-center justify-center gap-2 bg-blue-50 text-blue-700 font-semibold py-3 px-4 rounded-xl hover:bg-blue-600 hover:text-white transition-colors duration-300"
-                      >
-                        Iniciar Consulta
-                        <ArrowRight className="w-4 h-4 opacity-70 group-hover:opacity-100 group-hover:translate-x-1 transition-all" />
-                      </button>
-                    </div>
-                  ))}
+        </Link>
+      </section>
+
+      {/* Statistics Section */}
+      <section>
+        <div className="flex items-center justify-between mb-8">
+          <h2 className="text-2xl font-bold text-gray-900">Seu Desempenho</h2>
+          <Link href="/perfil" className="text-indigo-600 text-sm font-bold hover:underline">Ver relatório completo</Link>
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+          {stats.map((stat, idx) => (
+            <div key={idx} className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm hover:shadow-md transition-shadow">
+              <div className="flex items-center justify-between mb-4">
+                <div className="p-2 bg-gray-50 rounded-xl">{stat.icon}</div>
+                <span className="text-[10px] font-bold text-emerald-600 bg-emerald-50 px-2 py-1 rounded-full">{stat.trend}</span>
+              </div>
+              <p className="text-sm font-medium text-gray-500 mb-1">{stat.label}</p>
+              <h3 className="text-2xl font-bold text-gray-900">{stat.value}</h3>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {/* Bottom Grid: Recent Activity & Area Performance */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 pb-12">
+        {/* Recent Activity */}
+        <section className="lg:col-span-2 bg-white rounded-3xl border border-gray-100 shadow-sm overflow-hidden">
+          <div className="p-6 border-b border-gray-50 flex justify-between items-center">
+            <h2 className="font-bold text-gray-900 flex items-center gap-2">
+              <Clock size={20} className="text-gray-400" />
+              Atividades Recentes
+            </h2>
+          </div>
+          <div className="divide-y divide-gray-50">
+            {recentActivity.map((activity) => (
+              <div key={activity.id} className="p-6 hover:bg-gray-50 transition-colors flex items-center justify-between group">
+                <div className="flex items-center gap-4">
+                  <div className={`w-2 h-2 rounded-full ${activity.type === "Fase 1" ? "bg-blue-500" : "bg-violet-500"}`} />
+                  <div>
+                    <h4 className="text-sm font-bold text-gray-900">{activity.title}</h4>
+                    <p className="text-xs text-gray-500">{activity.type} • {activity.date}</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-4">
+                  <div className="text-right">
+                    <span className="text-sm font-extrabold text-indigo-600">{activity.score}</span>
+                  </div>
+                  <ChevronRight size={16} className="text-gray-300 group-hover:text-indigo-400 group-hover:translate-x-1 transition-all" />
                 </div>
               </div>
             ))}
           </div>
-        )}
+        </section>
+
+        {/* Areas Mastery */}
+        <section className="bg-white rounded-3xl border border-gray-100 shadow-sm p-6">
+          <h2 className="font-bold text-gray-900 mb-6">Domínio por Área</h2>
+          <div className="space-y-6">
+            {[
+              { area: "Clínica Médica", color: "bg-blue-500", progress: 85 },
+              { area: "Cirurgia Geral", color: "bg-red-500", progress: 62 },
+              { area: "Ginecologia e Obstetrícia", color: "bg-pink-500", progress: 78 },
+              { area: "Pediatria", color: "bg-amber-500", progress: 92 },
+              { area: "Saúde Coletiva", color: "bg-emerald-500", progress: 70 },
+            ].map((area) => (
+              <div key={area.area}>
+                <div className="flex justify-between text-xs font-bold mb-2">
+                  <span className="text-gray-700">{area.area}</span>
+                  <span className="text-gray-500">{area.progress}%</span>
+                </div>
+                <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
+                  <div 
+                    className={`h-full ${area.color} rounded-full transition-all duration-1000`} 
+                    style={{ width: `${area.progress}%` }}
+                  />
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
       </div>
     </div>
   );

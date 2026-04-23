@@ -11,6 +11,9 @@ interface User {
   full_name: string;
   role: string;
   gemini_api_key?: string;
+  profile_image?: string;
+  total_score?: number;
+  level?: number;
   created_at?: string;
 }
 
