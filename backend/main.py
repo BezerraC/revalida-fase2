@@ -508,11 +508,17 @@ async def delete_case(case_id: str, admin: dict = Depends(get_current_admin)):
 async def get_questions(
     exam_id: Optional[str] = None, 
     theme: Optional[str] = None,
+    specialty: Optional[str] = None,
+    topic: Optional[str] = None,
+    focus: Optional[str] = None,
     session_id: Optional[str] = None,
     current_user: dict = Depends(get_current_user)
 ):
     if session_id:
-        session = await database.db.simulado_sessions.find_one({"_id": ObjectId(session_id)})
+        session = await database.db.simulado_sessions.find_one({
+            "_id": ObjectId(session_id),
+            "user_id": str(current_user["_id"])
+        })
         if session and session.get("question_ids"):
             q_ids = [ObjectId(qid) for qid in session["question_ids"]]
             # Buscar na ordem específica
@@ -523,13 +529,17 @@ async def get_questions(
                 questions_map[q["_id"]] = q
             
             # Reordenar
-            return [questions_map[qid] for qid in session["question_ids"] if qid in questions_map]
+            ordered_questions = [questions_map[qid] for qid in session["question_ids"] if qid in questions_map]
+            if ordered_questions:
+                return ordered_questions
+            # Se não encontrou nenhuma questão pelos IDs, cai para a busca genérica por filtros
 
     query = {}
-    if exam_id:
-        query["exam_id"] = exam_id
-    if theme:
-        query["theme"] = theme
+    if exam_id and exam_id != "all": query["exam_id"] = exam_id
+    if theme and theme != "all": query["theme"] = theme
+    if specialty and specialty != "all": query["metadata.specialty"] = specialty
+    if topic and topic != "all": query["metadata.topic"] = topic
+    if focus and focus != "all": query["metadata.focus"] = {"$in": [focus]}
         
     questions_cursor = database.db.questions.find(query)
     questions = []
@@ -558,10 +568,33 @@ async def get_unique_exams(current_user: dict = Depends(get_current_user)):
 async def get_unique_themes(current_user: dict = Depends(get_current_user)):
     # Retorna uma lista única de temas presentes no banco
     themes_list = await database.db.questions.distinct("theme")
-    # Filtra valores vazios ou nulos
     themes_list = [t for t in themes_list if t and t.strip()]
     themes_list.sort()
     return themes_list
+
+@app.get("/specialties")
+async def get_unique_specialties(current_user: dict = Depends(get_current_user)):
+    # Retorna uma lista única de especialidades presentes no metadata
+    specialties_list = await database.db.questions.distinct("metadata.specialty")
+    specialties_list = [s for s in specialties_list if s and s.strip()]
+    specialties_list.sort()
+    return specialties_list
+
+@app.get("/topics")
+async def get_unique_topics(current_user: dict = Depends(get_current_user)):
+    # Retorna uma lista única de tópicos presentes no metadata
+    topics_list = await database.db.questions.distinct("metadata.topic")
+    topics_list = [t for t in topics_list if t and t.strip()]
+    topics_list.sort()
+    return topics_list
+
+@app.get("/focus")
+async def get_unique_focus(current_user: dict = Depends(get_current_user)):
+    # Retorna uma lista única de focus presentes no metadata
+    focus_list = await database.db.questions.distinct("metadata.focus")
+    focus_list = [f for f in focus_list if f and f.strip()]
+    focus_list.sort()
+    return focus_list
 
 @app.post("/simulado/sessions")
 async def create_simulado_session(
@@ -570,11 +603,17 @@ async def create_simulado_session(
 ):
     exam_id = data.get("exam_id")
     theme = data.get("theme")
+    specialty = data.get("specialty")
+    topic = data.get("topic")
+    focus = data.get("focus")
     
     # Buscar questões para fixar a ordem
     query = {}
     if exam_id: query["exam_id"] = exam_id
     if theme: query["theme"] = theme
+    if specialty: query["metadata.specialty"] = specialty
+    if topic: query["metadata.topic"] = topic
+    if focus: query["metadata.focus"] = {"$in": [focus]}
     
     questions_cursor = database.db.questions.find(query)
     question_ids = []
@@ -588,6 +627,9 @@ async def create_simulado_session(
         "user_id": str(current_user["_id"]),
         "exam_id": exam_id,
         "theme": theme,
+        "specialty": specialty,
+        "topic": topic,
+        "focus": focus,
         "mode": data.get("mode", "treino"),
         "time_limit": data.get("time_limit", "free"),
         "question_ids": question_ids,
@@ -737,7 +779,7 @@ async def get_simulado_history(current_user: dict = Depends(get_current_user)):
     user_id = str(current_user["_id"])
     cursor = database.db.simulado_sessions.find({
         "user_id": user_id,
-        "status": "finished"
+        "status": {"$in": ["finished", "active"]}
     }).sort("created_at", -1)
     
     out = []
@@ -746,13 +788,20 @@ async def get_simulado_history(current_user: dict = Depends(get_current_user)):
         # Tenta pegar o nome do exame ou o tema
         title = s.get("exam_id", "Simulado").replace("_", " ") if s.get("exam_id") else s.get("theme", "Simulado Personalizado")
         
+        # Para sessões ativas, podemos estimar o progresso
+        answered_count = len(s.get("answers", {}))
+        
         out.append({
             "session_id": str(s["_id"]),
             "title": title,
+            "exam_id": s.get("exam_id"),
+            "theme": s.get("theme"),
             "correct_answers": res.get("correct_answers", 0),
             "total_questions": res.get("total_questions", 0),
             "score_percentage": res.get("score_percentage", 0),
             "finished_at": res.get("finished_at") or s.get("created_at"),
-            "mode": s.get("mode", "treino")
+            "mode": s.get("mode", "treino"),
+            "status": s.get("status", "active"),
+            "answered_count": answered_count
         })
     return {"history": out}

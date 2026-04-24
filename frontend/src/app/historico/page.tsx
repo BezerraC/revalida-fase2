@@ -30,6 +30,10 @@ interface SimuladoHistoryItem {
   score_percentage: number;
   finished_at: string;
   mode: string;
+  exam_id?: string;
+  theme?: string;
+  status: "active" | "finished";
+  answered_count: number;
 }
 
 export default function HistoricoWrapper() {
@@ -266,16 +270,26 @@ function HistoricoPage() {
                         <div className="flex-1 space-y-3">
                            <div className="flex items-center gap-3">
                               <span className="bg-indigo-50 text-indigo-600 text-[10px] font-black uppercase tracking-[0.2em] px-3 py-1 rounded-lg border border-indigo-100">Fase 1</span>
-                              <span className={`text-[10px] font-black uppercase tracking-[0.2em] px-3 py-1 rounded-lg border ${
-                                item.score_percentage >= 70 ? "bg-emerald-50 text-emerald-600 border-emerald-100" :
-                                item.score_percentage >= 50 ? "bg-amber-50 text-amber-600 border-amber-100" : "bg-red-50 text-red-600 border-red-100"
-                              }`}>
-                                {item.score_percentage}% Acertos
-                              </span>
+                              {item.status === "finished" ? (
+                                <span className={`text-[10px] font-black uppercase tracking-[0.2em] px-3 py-1 rounded-lg border ${
+                                  item.score_percentage >= 70 ? "bg-emerald-50 text-emerald-600 border-emerald-100" :
+                                  item.score_percentage >= 50 ? "bg-amber-50 text-amber-600 border-amber-100" : "bg-red-50 text-red-600 border-red-100"
+                                }`}>
+                                  {item.score_percentage}% Acertos
+                                </span>
+                              ) : (
+                                <span className="bg-amber-50 text-amber-600 text-[10px] font-black uppercase tracking-[0.2em] px-3 py-1 rounded-lg border border-amber-100 animate-pulse">
+                                  Em Andamento
+                                </span>
+                              )}
                            </div>
                            <h3 className="text-2xl font-black text-slate-800 tracking-tight">{item.title}</h3>
                            <div className="flex items-center gap-4 text-slate-400 text-sm font-medium">
-                              <span>{item.correct_answers} de {item.total_questions} questões</span>
+                              {item.status === "finished" ? (
+                                <span>{item.correct_answers} de {item.total_questions} questões</span>
+                              ) : (
+                                <span>{item.answered_count} questões respondidas</span>
+                              )}
                               <span>•</span>
                               <span>Modo {item.mode === "treino" ? "Treino" : "Exame"}</span>
                               <span>•</span>
@@ -291,8 +305,25 @@ function HistoricoPage() {
                            >
                              <Trash2 size={22} />
                            </button>
-                           <button onClick={() => router.push(`/fase1/simulado/questoes?session_id=${item.session_id}`)} className="flex-1 md:flex-none flex items-center justify-center gap-2 bg-indigo-600 text-white font-black px-8 py-4 rounded-2xl hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-100">
-                               Ver Resultados <ArrowRight className="w-5 h-5" />
+                           <button 
+                             onClick={() => {
+                               if (item.status === "finished") {
+                                 router.push(`/fase1/simulado/questoes?session_id=${item.session_id}`);
+                               } else {
+                                 let url = `/fase1/simulado/questoes?session_id=${item.session_id}&mode=${item.mode}`;
+                                 if (item.exam_id) url += `&exam_id=${item.exam_id}`;
+                                 if (item.theme) url += `&theme=${item.theme}`;
+                                 router.push(url);
+                               }
+                             }} 
+                             className={`flex-1 md:flex-none flex items-center justify-center gap-2 font-black px-8 py-4 rounded-2xl transition-all shadow-lg ${
+                               item.status === "finished" 
+                                 ? "bg-indigo-600 text-white hover:bg-indigo-700 shadow-indigo-100" 
+                                 : "bg-slate-900 text-white hover:bg-black shadow-slate-200"
+                             }`}
+                           >
+                               {item.status === "finished" ? "Ver Resultados" : "Retomar Simulado"} 
+                               <ArrowRight className="w-5 h-5" />
                            </button>
                         </div>
                      </div>

@@ -15,6 +15,7 @@ import {
   RefreshCw,
   Home,
   LogOut,
+  Filter,
   Save
 } from "lucide-react";
 import api from "@/lib/api";
@@ -29,6 +30,17 @@ interface Question {
   correct_answer: string;
   theme: string;
   images: string[];
+  metadata?: {
+    area: string;
+    specialty: string;
+    topic: string;
+    focus: string[];
+  };
+  explanation?: {
+    context: string;
+    alternatives: Record<string, string>;
+    annulled_reason: string | null;
+  };
 }
 
 function ActiveSimuladoContent() {
@@ -39,6 +51,8 @@ function ActiveSimuladoContent() {
   const mode = searchParams.get("mode") || "treino";
   const examId = searchParams.get("exam_id");
   const theme = searchParams.get("theme");
+  const topic = searchParams.get("topic");
+  const focus = searchParams.get("focus");
   const timeLimit = searchParams.get("time_limit"); // "free" ou "4h"
 
   const { refreshUser } = useAuth();
@@ -156,6 +170,8 @@ function ActiveSimuladoContent() {
       const params = new URLSearchParams();
       if (examId) params.append("exam_id", examId);
       if (theme) params.append("theme", theme);
+      if (topic) params.append("topic", topic);
+      if (focus) params.append("focus", focus);
       if (sessionId) params.append("session_id", sessionId);
       
       const res = await api.get(`${url}?${params.toString()}`);
@@ -674,25 +690,102 @@ function ActiveSimuladoContent() {
                 </div>
              </div>
 
-             {/* {showFeedback && (
-                <div className={`p-10 rounded-[3rem] border-2 animate-in slide-in-from-right-10 duration-500 ${
-                  isCorrect ? "bg-emerald-50 border-emerald-100 shadow-xl shadow-emerald-50" : "bg-red-50 border-red-100 shadow-xl shadow-red-50"
-                }`}>
-                   <div className="flex items-center gap-3 mb-4">
-                      <div className={`w-8 h-8 rounded-xl flex items-center justify-center ${isCorrect ? "bg-emerald-100 text-emerald-600" : "bg-red-100 text-red-600"}`}>
-                        {isCorrect ? <CheckCircle2 className="w-5 h-5" /> : <XCircle className="w-5 h-5" />}
+             {showFeedback && (
+                <div className="space-y-6 animate-in slide-in-from-right-10 duration-500">
+                   {/* Main Feedback Card */}
+                   <div className={`p-10 rounded-[3rem] border-2 shadow-xl ${
+                     isCorrect ? "bg-emerald-50 border-emerald-100 shadow-emerald-50" : "bg-red-50 border-red-100 shadow-red-50"
+                   }`}>
+                      <div className="flex items-center gap-3 mb-6">
+                         <div className={`w-10 h-10 rounded-2xl flex items-center justify-center ${isCorrect ? "bg-emerald-100 text-emerald-600" : "bg-red-100 text-red-600"}`}>
+                           {isCorrect ? <CheckCircle2 className="w-6 h-6" /> : <XCircle className="w-6 h-6" />}
+                         </div>
+                         <div>
+                            <p className={`font-black uppercase tracking-[0.2em] text-[11px] ${isCorrect ? "text-emerald-600" : "text-red-600"}`}>
+                               {isCorrect ? "Excelente!" : "Atenção ao Caso"}
+                            </p>
+                            <h4 className={`text-xl font-black ${isCorrect ? "text-emerald-900" : "text-red-900"}`}>
+                               {isCorrect ? "Você acertou!" : "Não foi dessa vez"}
+                            </h4>
+                         </div>
                       </div>
-                      <p className={`font-black uppercase tracking-[0.2em] text-[11px] ${isCorrect ? "text-emerald-600" : "text-red-600"}`}>
-                         {isCorrect ? "Excelente!" : "Atenção"}
-                      </p>
+
+                      {/* Clinical Context */}
+                      <div className="space-y-4">
+                         <div className="flex items-center gap-2">
+                            <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest bg-white/50 px-2 py-1 rounded-md border border-slate-100">
+                               Especialidade: {currentQ.metadata?.specialty || currentQ.theme}
+                            </span>
+                            {currentQ.metadata?.topic && (
+                               <span className="text-[10px] font-black text-indigo-600 uppercase tracking-widest bg-indigo-50 px-2 py-1 rounded-md border border-indigo-100">
+                                  {currentQ.metadata.topic}
+                               </span>
+                            )}
+                         </div>
+                         
+                         <p className={`text-base leading-relaxed font-medium ${isCorrect ? "text-emerald-800" : "text-red-800"}`}>
+                            {currentQ.explanation?.context || (isCorrect 
+                              ? "O raciocínio clínico aplicado está alinhado com as diretrizes oficiais." 
+                              : `A resposta correta é a alternativa (${currentQ.correct_answer}).`)}
+                         </p>
+
+                         {/* Annulled Reason if applicable */}
+                         {currentQ.explanation?.annulled_reason && (
+                            <div className="p-4 bg-amber-50 border border-amber-200 rounded-2xl">
+                               <p className="text-[10px] font-black text-amber-600 uppercase tracking-widest mb-1">Motivo da Anulação</p>
+                               <p className="text-sm text-amber-800 font-bold leading-relaxed">
+                                  {currentQ.explanation.annulled_reason}
+                               </p>
+                            </div>
+                         )}
+                      </div>
                    </div>
-                   <p className={`font-bold text-base leading-relaxed tracking-tight ${isCorrect ? "text-emerald-900" : "text-red-900"}`}>
-                      {isCorrect 
-                        ? "Você acertou! O raciocínio clínico aplicado está alinhado com as diretrizes do Ministério da Saúde." 
-                        : `A resposta correta é a alternativa (${currentQ.correct_answer}). Recomendamos revisar a fisiopatologia deste caso em ${currentQ.theme}.`}
-                   </p>
+
+                   {/* Detailed Alternatives Explanation */}
+                   {currentQ.explanation?.alternatives && (
+                      <div className="bg-white p-10 rounded-[3rem] border border-slate-100 shadow-[0_20px_50px_rgba(0,0,0,0.04)] space-y-8">
+                         <div className="space-y-2">
+                            <h3 className="text-[11px] font-black text-slate-400 uppercase tracking-[0.25em] flex items-center gap-2">
+                               <Filter className="w-4 h-4 text-indigo-500" /> Por que esta alternativa?
+                            </h3>
+                            <div className="h-1 w-12 bg-indigo-600 rounded-full" />
+                         </div>
+
+                         <div className="space-y-6">
+                            {Object.entries(currentQ.explanation.alternatives).map(([key, value]) => {
+                               const isThisCorrect = key === currentQ.correct_answer;
+                               const isUserChoice = selected === key;
+                               
+                               return (
+                                  <div key={key} className={`space-y-2 p-4 rounded-2xl transition-all ${
+                                     isThisCorrect ? "bg-emerald-50/50 border border-emerald-100" : 
+                                     (isUserChoice ? "bg-red-50/50 border border-red-100" : "bg-slate-50/30")
+                                  }`}>
+                                     <div className="flex items-center gap-3">
+                                        <span className={`w-6 h-6 rounded-lg flex items-center justify-center text-[10px] font-black ${
+                                           isThisCorrect ? "bg-emerald-500 text-white" : 
+                                           (isUserChoice ? "bg-red-500 text-white" : "bg-slate-200 text-slate-500")
+                                        }`}>
+                                           {key}
+                                        </span>
+                                        <span className={`text-[10px] font-black uppercase tracking-widest ${
+                                           isThisCorrect ? "text-emerald-600" : 
+                                           (isUserChoice ? "text-red-600" : "text-slate-400")
+                                        }`}>
+                                           {String(value).startsWith("Correta") ? "Correta" : "Incorreta"}
+                                        </span>
+                                     </div>
+                                     <p className="text-sm font-bold text-slate-600 leading-relaxed pl-9">
+                                        {String(value).replace(/^Correta\. |^Incorreta\. /, "")}
+                                     </p>
+                                  </div>
+                               );
+                            })}
+                         </div>
+                      </div>
+                   )}
                 </div>
-             )} */}
+             )}
           </div>
 
         </div>
