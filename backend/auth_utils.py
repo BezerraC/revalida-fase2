@@ -1,10 +1,11 @@
 import database
 from fastapi import HTTPException, Depends
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials, OAuth2PasswordBearer
 from auth_handler import decode_access_token
 from bson import ObjectId
 
-security = HTTPBearer()
+security = HTTPBearer(scheme_name="BearerAuth", description="Insira o seu token JWT para acessar endpoints protegidos")
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/docs-login", auto_error=False)
 
 async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)):
     token = credentials.credentials

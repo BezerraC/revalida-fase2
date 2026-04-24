@@ -1,18 +1,52 @@
 from fastapi import FastAPI, HTTPException, Request, Depends, Body, File, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+from fastapi.security import OAuth2PasswordRequestForm
 import database
 from models import CaseModel, ChatSessionModel, ChatRequest, ChatTurn, Fase1Request, Fase1ChatRequest, UserRegistration, UserLogin
 from bson import ObjectId
 import gemini_service
 import os
 from pydantic import BaseModel
-from auth_utils import get_current_user, get_current_admin
+from auth_utils import get_current_user, get_current_admin, oauth2_scheme
 from auth_handler import get_password_hash, verify_password, create_access_token
 from datetime import datetime
 from typing import Optional
 
-app = FastAPI(title="Revalida AI API")
+app = FastAPI(
+    title="Med Master API",
+    description="""
+    Med Master: Plataforma de Elite para o Revalida
+    
+    Esta API fornece todos os recursos necessários para a plataforma Med Master, incluindo:
+    
+    Autenticação: Gestão de usuários e perfis.
+    Simulados: Configuração e execução de simulados da Fase 1.
+    Histórico: Acompanhamento de progresso e resultados.
+    Inteligência Artificial: Geração de explicações e chat clínico.
+    """,
+    version="1.0.0",
+    contact={
+        "name": "Suporte Med Master",
+        "email": "cbezerraneto@gmail.com",
+    },
+    openapi_tags=[
+        {"name": "Auth", "description": "Gerenciamento de usuários e autenticação"},
+        {"name": "Simulados", "description": "Criação, execução e histórico de simulados"},
+        {"name": "Casos Clínicos", "description": "Gestão de casos e interações"},
+        {"name": "Metadata", "description": "Endpoints auxiliares para filtros e temas"}
+    ],
+    dependencies=[Depends(oauth2_scheme)]
+)
+
+@app.post("/auth/docs-login", tags=["Auth"], include_in_schema=True)
+async def login_for_docs(form_data: OAuth2PasswordRequestForm = Depends()):
+    user = await database.db.users.find_one({"email": form_data.username})
+    if not user or not verify_password(form_data.password, user["hashed_password"]):
+        raise HTTPException(status_code=401, detail="E-mail ou senha incorretos")
+    
+    access_token = create_access_token(data={"sub": user["email"]})
+    return {"access_token": access_token, "token_type": "bearer"}
 
 app.add_middleware(
     CORSMiddleware,
@@ -46,7 +80,7 @@ async def startup_db_client():
 async def shutdown_db_client():
     await database.close_mongo_connection()
 
-@app.get("/cases")
+@app.get("/cases", tags=["Casos Clínicos"])
 async def get_cases(current_user: dict = Depends(get_current_user)):
     cases_cursor = database.db.cases.find({})
     cases = []
@@ -58,7 +92,7 @@ async def get_cases(current_user: dict = Depends(get_current_user)):
 class CreateSessionRequest(BaseModel):
     case_id: str
 
-@app.post("/auth/register")
+@app.post("/auth/register", tags=["Auth"])
 async def register(user_data: UserRegistration):
     if user_data.password != user_data.confirm_password:
         raise HTTPException(status_code=400, detail="As senhas não coincidem")
@@ -80,7 +114,7 @@ async def register(user_data: UserRegistration):
     await database.db.users.insert_one(user_dict)
     return {"message": "Usuário criado com sucesso"}
 
-@app.post("/auth/login")
+@app.post("/auth/login", tags=["Auth"])
 async def login(credentials: UserLogin):
     user = await database.db.users.find_one({"email": credentials.email})
     if not user or not verify_password(credentials.password, user["hashed_password"]):
@@ -89,7 +123,7 @@ async def login(credentials: UserLogin):
     access_token = create_access_token(data={"sub": user["email"]})
     return {"access_token": access_token, "token_type": "bearer"}
 
-@app.get("/auth/me")
+@app.get("/auth/me", tags=["Auth"])
 async def get_me(current_user: dict = Depends(get_current_user)):
     return {
         "id": str(current_user["_id"]),
@@ -103,7 +137,7 @@ async def get_me(current_user: dict = Depends(get_current_user)):
         "created_at": current_user.get("created_at")
     }
 
-@app.patch("/auth/profile/api-key")
+@app.patch("/auth/profile/api-key", tags=["Auth"])
 async def update_api_key(api_key: str = Body(..., embed=True), current_user: dict = Depends(get_current_user)):
     await database.db.users.update_one(
         {"_id": ObjectId(current_user["_id"])},
@@ -115,7 +149,7 @@ class UpdateProfileRequest(BaseModel):
     full_name: str
     email: str
 
-@app.patch("/auth/profile")
+@app.patch("/auth/profile", tags=["Auth"])
 async def update_profile(data: UpdateProfileRequest, current_user: dict = Depends(get_current_user)):
     # Se o e-mail mudou, verificar se o novo e-mail já está em uso
     if data.email != current_user["email"]:
@@ -132,7 +166,7 @@ async def update_profile(data: UpdateProfileRequest, current_user: dict = Depend
     )
     return {"message": "Perfil atualizado com sucesso"}
 
-@app.post("/auth/profile/image")
+@app.post("/auth/profile/image", tags=["Auth"])
 async def upload_profile_image(file: UploadFile = File(...), current_user: dict = Depends(get_current_user)):
     # Validar extensão
     ext = file.filename.split(".")[-1].lower()
@@ -158,7 +192,7 @@ async def upload_profile_image(file: UploadFile = File(...), current_user: dict 
     
     return {"image_url": image_url, "message": "Foto de perfil atualizada!"}
 
-@app.post("/sessions")
+@app.post("/sessions", tags=["Casos Clínicos"])
 async def create_session(req: CreateSessionRequest, current_user: dict = Depends(get_current_user)):
     user_id = str(current_user["_id"])
     case = await database.db.cases.find_one({"_id": ObjectId(req.case_id)})
@@ -174,7 +208,7 @@ async def create_session(req: CreateSessionRequest, current_user: dict = Depends
     result = await database.db.sessions.insert_one(session)
     return {"session_id": str(result.inserted_id)}
 
-@app.get("/sessions/{session_id}")
+@app.get("/sessions/{session_id}", tags=["Casos Clínicos"])
 async def get_session(session_id: str, current_user: dict = Depends(get_current_user)):
     user_id = str(current_user["_id"])
     query = {"_id": ObjectId(session_id)}
@@ -195,7 +229,7 @@ async def get_session(session_id: str, current_user: dict = Depends(get_current_
         
     return session
 
-@app.delete("/sessions/{session_id}")
+@app.delete("/sessions/{session_id}", tags=["Casos Clínicos"])
 async def delete_session(session_id: str, current_user: dict = Depends(get_current_user)):
     user_id = str(current_user["_id"])
     result = await database.db.sessions.delete_one({"_id": ObjectId(session_id), "user_id": user_id})
@@ -203,7 +237,7 @@ async def delete_session(session_id: str, current_user: dict = Depends(get_curre
         raise HTTPException(status_code=404, detail="Sessão não encontrada ou não pertence ao usuário")
     return {"message": "Sessão removida com sucesso"}
 
-@app.get("/admin/sessions")
+@app.get("/admin/sessions", tags=["Casos Clínicos"])
 async def get_all_sessions(admin: dict = Depends(get_current_admin)):
     sessions_cursor = database.db.sessions.find({})
     sessions = []
@@ -227,7 +261,7 @@ async def get_all_sessions(admin: dict = Depends(get_current_admin)):
     sessions.reverse() # Mais recentes primeiro
     return sessions
 
-@app.post("/chat")
+@app.post("/chat", tags=["Casos Clínicos"])
 async def chat_interaction(request: ChatRequest, current_user: dict = Depends(get_current_user)):
     user_id = str(current_user["_id"])
     api_key = current_user.get("gemini_api_key")
@@ -262,7 +296,7 @@ async def chat_interaction(request: ChatRequest, current_user: dict = Depends(ge
     
     return {"reply": response_text}
 
-@app.post("/feedback/{session_id}")
+@app.post("/feedback/{session_id}", tags=["Casos Clínicos"])
 async def get_feedback(session_id: str, current_user: dict = Depends(get_current_user)):
     user_id = str(current_user["_id"])
     api_key = current_user.get("gemini_api_key")
@@ -299,7 +333,7 @@ async def get_feedback(session_id: str, current_user: dict = Depends(get_current
     return {"feedback": feedback_text}
 
 
-@app.post("/fase1/sessions")
+@app.post("/fase1/sessions", tags=["Simulados"])
 async def create_fase1_session(current_user: dict = Depends(get_current_user)):
     user_id = str(current_user["_id"])
     session = {
@@ -310,7 +344,7 @@ async def create_fase1_session(current_user: dict = Depends(get_current_user)):
     result = await database.db.fase1_sessions.insert_one(session)
     return {"session_id": str(result.inserted_id)}
 
-@app.get("/fase1/sessions/{session_id}")
+@app.get("/fase1/sessions/{session_id}", tags=["Simulados"])
 async def get_fase1_session(session_id: str, current_user: dict = Depends(get_current_user)):
     user_id = str(current_user["_id"])
     session = await database.db.fase1_sessions.find_one({"_id": ObjectId(session_id), "user_id": user_id})
@@ -319,7 +353,7 @@ async def get_fase1_session(session_id: str, current_user: dict = Depends(get_cu
     session["_id"] = str(session["_id"])
     return session
 
-@app.delete("/fase1/sessions/{session_id}")
+@app.delete("/fase1/sessions/{session_id}", tags=["Simulados"])
 async def delete_fase1_session(session_id: str, current_user: dict = Depends(get_current_user)):
     user_id = str(current_user["_id"])
     result = await database.db.fase1_sessions.delete_one({"_id": ObjectId(session_id), "user_id": user_id})
@@ -327,7 +361,7 @@ async def delete_fase1_session(session_id: str, current_user: dict = Depends(get
         raise HTTPException(status_code=404, detail="Sessão não encontrada ou não pertence ao usuário")
     return {"message": "Sessão removida com sucesso"}
 
-@app.post("/fase1/chat")
+@app.post("/fase1/chat", tags=["Simulados"])
 async def fase1_chat(request: Fase1ChatRequest, current_user: dict = Depends(get_current_user)):
     user_id = str(current_user["_id"])
     api_key = current_user.get("gemini_api_key")
@@ -372,7 +406,7 @@ async def fase1_chat(request: Fase1ChatRequest, current_user: dict = Depends(get
     }
 
 
-@app.get("/history")
+@app.get("/history", tags=["Simulados"])
 async def get_history(current_user: dict = Depends(get_current_user)):
     user_id = str(current_user["_id"])
     sessions_cursor = database.db.sessions.find({
@@ -399,7 +433,7 @@ async def get_history(current_user: dict = Depends(get_current_user)):
     out.reverse()
     return {"history": out}
 
-@app.get("/fase1/history")
+@app.get("/fase1/history", tags=["Simulados"])
 async def get_fase1_history(current_user: dict = Depends(get_current_user)):
     user_id = str(current_user["_id"])
     sessions_cursor = database.db.fase1_sessions.find({
@@ -433,7 +467,7 @@ async def get_fase1_history(current_user: dict = Depends(get_current_user)):
 # ADMIN ENDPOINTS
 # ----------------------------------------------------------------
 
-@app.get("/admin/stats")
+@app.get("/admin/stats", tags=["Auth"])
 async def get_admin_stats(admin: dict = Depends(get_current_admin)):
     users_count = await database.db.users.count_documents({})
     cases_count = await database.db.cases.count_documents({})
@@ -448,7 +482,7 @@ async def get_admin_stats(admin: dict = Depends(get_current_admin)):
         "fase1_sessions": sessions_fase1
     }
 
-@app.get("/admin/users")
+@app.get("/admin/users", tags=["Auth"])
 async def get_admin_users(admin: dict = Depends(get_current_admin)):
     users_cursor = database.db.users.find({})
     users = []
@@ -460,7 +494,7 @@ async def get_admin_users(admin: dict = Depends(get_current_admin)):
         users.append(user)
     return users
 
-@app.patch("/admin/users/{user_id}/role")
+@app.patch("/admin/users/{user_id}/role", tags=["Auth"])
 async def update_user_role(user_id: str, role: str = Body(..., embed=True), admin: dict = Depends(get_current_admin)):
     if role not in ["admin", "student"]:
         raise HTTPException(status_code=400, detail="Role inválida")
@@ -471,7 +505,7 @@ async def update_user_role(user_id: str, role: str = Body(..., embed=True), admi
     )
     return {"message": f"Role do usuário atualizada para {role}"}
 
-@app.post("/admin/cases")
+@app.post("/admin/cases", tags=["Casos Clínicos"])
 async def create_case(case_data: CaseModel, admin: dict = Depends(get_current_admin)):
     case_dict = case_data.dict(by_alias=True)
     if "_id" in case_dict:
@@ -480,7 +514,7 @@ async def create_case(case_data: CaseModel, admin: dict = Depends(get_current_ad
     result = await database.db.cases.insert_one(case_dict)
     return {"id": str(result.inserted_id), "message": "Caso criado com sucesso"}
 
-@app.patch("/admin/cases/{case_id}")
+@app.patch("/admin/cases/{case_id}", tags=["Casos Clínicos"])
 async def update_case(case_id: str, case_data: CaseModel, admin: dict = Depends(get_current_admin)):
     update_data = case_data.dict(by_alias=True, exclude_unset=True)
     if "_id" in update_data:
@@ -492,7 +526,7 @@ async def update_case(case_id: str, case_data: CaseModel, admin: dict = Depends(
     )
     return {"message": "Caso atualizado com sucesso"}
 
-@app.delete("/admin/cases/{case_id}")
+@app.delete("/admin/cases/{case_id}", tags=["Casos Clínicos"])
 async def delete_case(case_id: str, admin: dict = Depends(get_current_admin)):
     await database.db.cases.delete_one({"_id": ObjectId(case_id)})
     return {"message": "Caso removido com sucesso"}
@@ -501,7 +535,7 @@ async def delete_case(case_id: str, admin: dict = Depends(get_current_admin)):
 # FASE 1: QUESTÕES E SIMULADOS
 # ----------------------------------------------------------------
 
-@app.get("/questions")
+@app.get("/questions", tags=["Simulados"])
 async def get_questions(
     exam_id: Optional[str] = None, 
     theme: Optional[str] = None,
@@ -545,7 +579,7 @@ async def get_questions(
         questions.append(q)
     return questions
 
-@app.get("/questions/{question_id}")
+@app.get("/questions/{question_id}", tags=["Simulados"])
 async def get_question(question_id: str, current_user: dict = Depends(get_current_user)):
     q = await database.db.questions.find_one({"_id": ObjectId(question_id)})
     if not q:
@@ -553,7 +587,7 @@ async def get_question(question_id: str, current_user: dict = Depends(get_curren
     q["_id"] = str(q["_id"])
     return q
 
-@app.get("/exams")
+@app.get("/exams", tags=["Metadata"])
 async def get_unique_exams(current_user: dict = Depends(get_current_user)):
     # Retorna uma lista única de exam_ids presentes no banco
     exams_list = await database.db.questions.distinct("exam_id")
@@ -561,7 +595,7 @@ async def get_unique_exams(current_user: dict = Depends(get_current_user)):
     exams_list.sort(reverse=True)
     return exams_list
 
-@app.get("/themes")
+@app.get("/themes", tags=["Metadata"])
 async def get_unique_themes(current_user: dict = Depends(get_current_user)):
     # Retorna uma lista única de temas presentes no banco
     themes_list = await database.db.questions.distinct("theme")
@@ -569,7 +603,7 @@ async def get_unique_themes(current_user: dict = Depends(get_current_user)):
     themes_list.sort()
     return themes_list
 
-@app.get("/specialties")
+@app.get("/specialties", tags=["Metadata"])
 async def get_unique_specialties(current_user: dict = Depends(get_current_user)):
     # Retorna uma lista única de especialidades presentes no metadata
     specialties_list = await database.db.questions.distinct("metadata.specialty")
@@ -577,7 +611,7 @@ async def get_unique_specialties(current_user: dict = Depends(get_current_user))
     specialties_list.sort()
     return specialties_list
 
-@app.get("/topics")
+@app.get("/topics", tags=["Metadata"])
 async def get_unique_topics(current_user: dict = Depends(get_current_user)):
     # Retorna uma lista única de tópicos presentes no metadata
     topics_list = await database.db.questions.distinct("metadata.topic")
@@ -585,7 +619,7 @@ async def get_unique_topics(current_user: dict = Depends(get_current_user)):
     topics_list.sort()
     return topics_list
 
-@app.get("/focus")
+@app.get("/focus", tags=["Metadata"])
 async def get_unique_focus(current_user: dict = Depends(get_current_user)):
     # Retorna uma lista única de focus presentes no metadata
     focus_list = await database.db.questions.distinct("metadata.focus")
@@ -593,7 +627,7 @@ async def get_unique_focus(current_user: dict = Depends(get_current_user)):
     focus_list.sort()
     return focus_list
 
-@app.post("/simulado/sessions")
+@app.post("/simulado/sessions", tags=["Simulados"])
 async def create_simulado_session(
     data: dict = Body(...),
     current_user: dict = Depends(get_current_user)
@@ -639,7 +673,7 @@ async def create_simulado_session(
     result = await database.db.simulado_sessions.insert_one(session_dict)
     return {"session_id": str(result.inserted_id)}
 
-@app.patch("/simulado/sessions/{session_id}")
+@app.patch("/simulado/sessions/{session_id}", tags=["Simulados"])
 async def update_simulado_session(
     session_id: str,
     data: dict = Body(...),
@@ -657,7 +691,7 @@ async def update_simulado_session(
     )
     return {"message": "Progresso salvo"}
 
-@app.get("/simulado/active")
+@app.get("/simulado/active", tags=["Simulados"])
 async def get_active_sessions(current_user: dict = Depends(get_current_user)):
     cursor = database.db.simulado_sessions.find({
         "user_id": str(current_user["_id"]),
@@ -670,7 +704,7 @@ async def get_active_sessions(current_user: dict = Depends(get_current_user)):
         sessions.append(s)
     return sessions
 
-@app.get("/simulado/sessions/{session_id}")
+@app.get("/simulado/sessions/{session_id}", tags=["Simulados"])
 async def get_simulado_session(session_id: str, current_user: dict = Depends(get_current_user)):
     session = await database.db.simulado_sessions.find_one({"_id": ObjectId(session_id), "user_id": str(current_user["_id"])})
     if not session:
@@ -678,7 +712,7 @@ async def get_simulado_session(session_id: str, current_user: dict = Depends(get
     session["_id"] = str(session["_id"])
     return session
 
-@app.post("/simulado/sessions/{session_id}/finish")
+@app.post("/simulado/sessions/{session_id}/finish", tags=["Simulados"])
 async def finish_simulado_session(session_id: str, current_user: dict = Depends(get_current_user)):
     user_id = str(current_user["_id"])
     session = await database.db.simulado_sessions.find_one({"_id": ObjectId(session_id), "user_id": user_id})
@@ -763,7 +797,7 @@ async def finish_simulado_session(session_id: str, current_user: dict = Depends(
 
     return {"message": "Simulado finalizado com sucesso", "result": result_data}
 
-@app.delete("/simulado/sessions/{session_id}")
+@app.delete("/simulado/sessions/{session_id}", tags=["Simulados"])
 async def delete_simulado_session(session_id: str, current_user: dict = Depends(get_current_user)):
     user_id = str(current_user["_id"])
     result = await database.db.simulado_sessions.delete_one({"_id": ObjectId(session_id), "user_id": user_id})
@@ -771,7 +805,7 @@ async def delete_simulado_session(session_id: str, current_user: dict = Depends(
         raise HTTPException(status_code=404, detail="Sessão não encontrada ou não pertence ao usuário")
     return {"message": "Sessão removida com sucesso"}
 
-@app.get("/simulado/history")
+@app.get("/simulado/history", tags=["Simulados"])
 async def get_simulado_history(current_user: dict = Depends(get_current_user)):
     user_id = str(current_user["_id"])
     cursor = database.db.simulado_sessions.find({
