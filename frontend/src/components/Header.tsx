@@ -5,6 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Menu, X, User, LogOut, ChevronRight } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
+import { BASE_URL } from "@/lib/api";
 
 const Header = () => {
   const [isOpen, setIsOpen] = useState(false);
@@ -79,7 +80,7 @@ const Header = () => {
                   <div className="w-10 h-10 bg-indigo-50 rounded-xl overflow-hidden flex items-center justify-center border border-indigo-100">
                     {user.profile_image ? (
                       <img 
-                        src={`http://localhost:8000${user.profile_image}`} 
+                        src={`${BASE_URL}${user.profile_image}`} 
                         alt={user.full_name} 
                         className="w-full h-full object-cover"
                       />

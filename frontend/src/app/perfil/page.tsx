@@ -31,7 +31,7 @@ import {
   Trophy
 } from "lucide-react";
 import Link from "next/link";
-import api from "@/lib/api";
+import api, { BASE_URL } from "@/lib/api";
 import ConfirmModal from "@/components/ConfirmModal";
 
 interface SimuladoSession {
@@ -226,7 +226,7 @@ export default function ProfilePage() {
                   <div className="w-full h-full bg-indigo-50 rounded-2xl flex items-center justify-center text-indigo-600 overflow-hidden relative">
                     {user.profile_image ? (
                       <img 
-                        src={`http://localhost:8000${user.profile_image}`} 
+                        src={`${BASE_URL}${user.profile_image}`} 
                         alt={user.full_name} 
                         className="w-full h-full object-cover"
                       />

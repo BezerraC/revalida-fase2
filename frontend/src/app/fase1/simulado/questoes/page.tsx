@@ -18,7 +18,7 @@ import {
   Filter,
   Save
 } from "lucide-react";
-import api from "@/lib/api";
+import api, { BASE_URL } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 
 interface Question {
@@ -576,10 +576,10 @@ function ActiveSimuladoContent() {
                    {currentQ.images.map((img, idx) => (
                       <div key={idx} className="relative w-full bg-slate-50 rounded-[.8rem] overflow-hidden group border border-slate-100 shadow-inner">
                          <img 
-                          src={`http://localhost:8000/${img}`} 
+                          src={`${BASE_URL}/${img}`} 
                           alt={`Questão ${currentQ.number} - Imagem ${idx + 1}`}
                           className="w-full h-auto object-contain cursor-zoom-in group-hover:scale-[1.02] transition-transform duration-700"
-                          onClick={() => setZoomImage(`http://localhost:8000/${img}`)}
+                          onClick={() => setZoomImage(`${BASE_URL}/${img}`)}
                          />
                          <div className="absolute inset-0 bg-black/0 group-hover:bg-black/[0.02] transition-colors pointer-events-none" />
                          {/* <div className="absolute bottom-6 right-6 bg-white/90 backdrop-blur-md px-4 py-2 rounded-xl text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] opacity-0 group-hover:opacity-100 transition-all translate-y-2 group-hover:translate-y-0">
