@@ -12,7 +12,8 @@ import {
   MoreVertical,
   Mail,
   Calendar,
-  ChevronRight
+  ChevronRight,
+  X
 } from "lucide-react";
 import Link from "next/link";
 
@@ -31,6 +32,11 @@ export default function AdminReportsPage() {
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   const [filterStatus, setFilterStatus] = useState("all");
+
+  // Question Preview State
+  const [selectedQuestion, setSelectedQuestion] = useState<any>(null);
+  const [isQuestionModalOpen, setIsQuestionModalOpen] = useState(false);
+  const [loadingQuestion, setLoadingQuestion] = useState(false);
 
   useEffect(() => {
     fetchReports();
@@ -54,6 +60,21 @@ export default function AdminReportsPage() {
     } catch (err) {
       console.error("Erro ao atualizar status:", err);
       alert("Erro ao atualizar status do reporte.");
+    }
+  };
+
+  const handleViewQuestion = async (questionId: string) => {
+    setLoadingQuestion(true);
+    setIsQuestionModalOpen(true);
+    try {
+      const res = await api.get(`/questions/${questionId}`);
+      setSelectedQuestion(res.data);
+    } catch (err) {
+      console.error("Erro ao carregar questão:", err);
+      alert("Erro ao carregar detalhes da questão.");
+      setIsQuestionModalOpen(false);
+    } finally {
+      setLoadingQuestion(false);
     }
   };
 
@@ -216,7 +237,11 @@ export default function AdminReportsPage() {
                             Reabrir
                           </button>
                         )}
-                        <button className="p-2 hover:bg-white rounded-lg border border-transparent hover:border-slate-200 transition-all text-slate-400 hover:text-blue-600" title="Ver Questão">
+                        <button 
+                          onClick={() => handleViewQuestion(report.question_id)}
+                          className="p-2 hover:bg-white rounded-lg border border-transparent hover:border-slate-200 transition-all text-slate-400 hover:text-blue-600" 
+                          title="Ver Questão"
+                        >
                           <ExternalLink className="w-4 h-4" />
                         </button>
                       </div>
@@ -237,7 +262,117 @@ export default function AdminReportsPage() {
             </div>
           </div>
         )}
-      </div>
+        </div>
+
+      {/* Question Preview Modal */}
+      {isQuestionModalOpen && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-300">
+          <div className="bg-white rounded-[3rem] shadow-2xl p-0 max-w-4xl w-full max-h-[90vh] overflow-hidden flex flex-col animate-in zoom-in-95 duration-300">
+            <div className="p-8 border-b border-slate-100 flex items-center justify-between bg-white sticky top-0 z-10">
+              <div className="flex items-center gap-4">
+                <div className="p-3 bg-blue-100 text-blue-600 rounded-2xl">
+                  <Search className="w-6 h-6" />
+                </div>
+                <div>
+                  <h2 className="text-2xl font-black text-slate-900 tracking-tight">Visualizar Questão</h2>
+                  <p className="text-sm text-slate-500 font-medium">Confira os detalhes da questão reportada.</p>
+                </div>
+              </div>
+              <button 
+                onClick={() => {
+                  setIsQuestionModalOpen(false);
+                  setSelectedQuestion(null);
+                }}
+                className="p-3 hover:bg-slate-100 rounded-2xl transition-all"
+              >
+                <X className="w-6 h-6 text-slate-400" />
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto p-10 space-y-8 bg-slate-50/30">
+              {loadingQuestion ? (
+                <div className="py-20 flex flex-col items-center justify-center gap-4">
+                  <div className="w-12 h-12 border-4 border-blue-600/10 border-t-blue-600 rounded-full animate-spin" />
+                  <p className="font-black text-slate-400 uppercase tracking-widest text-xs">Buscando dados da questão...</p>
+                </div>
+              ) : selectedQuestion ? (
+                <div className="space-y-8">
+                  {/* Question Header */}
+                  <div className="flex flex-wrap gap-3">
+                    <span className="px-4 py-1.5 bg-white border border-slate-200 rounded-xl text-[10px] font-black text-slate-600 uppercase tracking-[0.15em]">
+                      {selectedQuestion.theme}
+                    </span>
+                    <span className="px-4 py-1.5 bg-blue-50 border border-blue-100 rounded-xl text-[10px] font-black text-blue-600 uppercase tracking-[0.15em]">
+                      {selectedQuestion.exam_id?.replace('_', ' ')}
+                    </span>
+                  </div>
+
+                  {/* Question Text */}
+                  <div className="p-8 bg-white rounded-3xl border border-slate-100 shadow-sm">
+                    <p className="text-xl font-bold text-slate-800 leading-relaxed whitespace-pre-wrap">
+                      {selectedQuestion.text}
+                    </p>
+                  </div>
+
+                  {/* Images if any */}
+                  {selectedQuestion.images && selectedQuestion.images.length > 0 && (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      {selectedQuestion.images.map((img: string, idx: number) => (
+                        <div key={idx} className="bg-white p-4 rounded-3xl border border-slate-100 shadow-sm overflow-hidden">
+                          <img 
+                            src={img.startsWith('http') ? img : `http://localhost:8000/exams/images/${img}`} 
+                            alt={`Imagem ${idx + 1}`} 
+                            className="w-full h-auto object-contain rounded-xl"
+                          />
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Alternatives */}
+                  <div className="space-y-4">
+                    <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Alternativas</h3>
+                    <div className="grid gap-4">
+                      {Object.entries(selectedQuestion.alternatives).map(([letter, text]: [string, any]) => (
+                        <div 
+                          key={letter}
+                          className={`p-6 rounded-2xl border-2 flex gap-6 items-start transition-all ${
+                            letter === selectedQuestion.correct_answer 
+                              ? "bg-emerald-50 border-emerald-500 shadow-sm" 
+                              : "bg-white border-slate-100"
+                          }`}
+                        >
+                          <div className={`w-10 h-10 rounded-xl flex items-center justify-center font-black shrink-0 ${
+                            letter === selectedQuestion.correct_answer 
+                              ? "bg-emerald-600 text-white" 
+                              : "bg-slate-100 text-slate-400"
+                          }`}>
+                            {letter}
+                          </div>
+                          <p className={`pt-2 font-bold text-lg ${
+                            letter === selectedQuestion.correct_answer ? "text-emerald-900" : "text-slate-700"
+                          }`}>
+                            {text}
+                          </p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              ) : null}
+            </div>
+
+            <div className="p-8 border-t border-slate-100 bg-white flex justify-end">
+              <button 
+                onClick={() => setIsQuestionModalOpen(false)}
+                className="px-10 py-4 bg-slate-900 text-white rounded-2xl font-black hover:bg-black transition-all active:scale-95"
+              >
+                Fechar Visualização
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

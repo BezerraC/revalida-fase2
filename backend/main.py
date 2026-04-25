@@ -7,10 +7,10 @@ from models import CaseModel, ChatSessionModel, ChatRequest, ChatTurn, Fase1Requ
 from bson import ObjectId
 import gemini_service
 import os
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from auth_utils import get_current_user, get_current_admin, oauth2_scheme
 from auth_handler import get_password_hash, verify_password, create_access_token
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
 from typing import Optional
 
 app = FastAPI(
@@ -97,7 +97,7 @@ class QuestionReport(BaseModel):
     description: Optional[str] = None
     question_id: str
     user_email: str
-    created_at: datetime = datetime.utcnow()
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     status: str = "pending" # pending, resolved, dismissed
 
 @app.post("/auth/register", tags=["Auth"])
@@ -116,7 +116,7 @@ async def register(user_data: UserRegistration):
         "hashed_password": hashed_password,
         "role": "student",
         "gemini_api_key": None,
-        "created_at": datetime.utcnow()
+        "created_at": datetime.now(timezone.utc)
     }
     
     await database.db.users.insert_one(user_dict)
@@ -604,7 +604,7 @@ async def report_question(
     report_dict = report.dict()
     report_dict["user_email"] = current_user["email"]
     report_dict["question_id"] = question_id
-    report_dict["created_at"] = datetime.utcnow()
+    report_dict["created_at"] = datetime.now(timezone.utc)
     
     result = await database.db.question_reports.insert_one(report_dict)
     return {"message": "Reporte enviado com sucesso", "report_id": str(result.inserted_id)}
@@ -729,7 +729,7 @@ async def create_simulado_session(
         "current_index": 0,
         "elapsed_time": 0,
         "status": "active",
-        "created_at": datetime.utcnow()
+        "created_at": datetime.now(timezone.utc)
     }
     result = await database.db.simulado_sessions.insert_one(session_dict)
     return {"session_id": str(result.inserted_id)}
@@ -835,7 +835,7 @@ async def finish_simulado_session(session_id: str, current_user: dict = Depends(
         "correct_answers": correct_answers,
         "score_percentage": round(score_percentage, 2),
         "theme_metrics": theme_metrics,
-        "finished_at": datetime.utcnow()
+        "finished_at": datetime.now(timezone.utc)
     }
 
     # Atualizar sessão
