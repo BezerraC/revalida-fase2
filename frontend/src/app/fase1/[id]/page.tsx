@@ -31,8 +31,14 @@ export default function Fase1Tutor() {
   const isFetchingRef = useRef(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
+  const chatContainerRef = useRef<HTMLDivElement>(null);
   const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    if (chatContainerRef.current) {
+      chatContainerRef.current.scrollTo({
+        top: chatContainerRef.current.scrollHeight,
+        behavior: "smooth"
+      });
+    }
   };
   
   const historyRef = useRef<ChatTurn[]>([]);
@@ -116,7 +122,7 @@ export default function Fase1Tutor() {
 
   useEffect(() => {
     scrollToBottom();
-  }, [history, finalTextBuffer, interimText, loadingReply]);
+  }, [history, loadingReply]);
 
   const speakText = (text: string) => {
     if ("speechSynthesis" in window) {
@@ -310,7 +316,10 @@ export default function Fase1Tutor() {
         </div>
 
         {/* Messages */}
-        <div className="flex-1 overflow-y-auto p-6 space-y-6 bg-slate-50 scroll-smooth custom-scrollbar [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-slate-300 [&::-webkit-scrollbar-thumb]:rounded-full hover:[&::-webkit-scrollbar-thumb]:bg-slate-400">
+        <div 
+          ref={chatContainerRef}
+          className="flex-1 overflow-y-auto p-6 space-y-6 bg-slate-50 scroll-smooth custom-scrollbar [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-slate-300 [&::-webkit-scrollbar-thumb]:rounded-full hover:[&::-webkit-scrollbar-thumb]:bg-slate-400"
+        >
           
           <div className="flex w-full justify-start">
               <div className="max-w-[85%] rounded-2xl px-5 py-4 bg-white border border-slate-200 shadow-sm text-slate-700">

@@ -29,8 +29,14 @@ export default function Simulacao() {
   const isFetchingRef = useRef(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
+  const chatContainerRef = useRef<HTMLDivElement>(null);
   const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    if (chatContainerRef.current) {
+      chatContainerRef.current.scrollTo({
+        top: chatContainerRef.current.scrollHeight,
+        behavior: "smooth"
+      });
+    }
   };
 
   const historyRef = useRef<ChatTurn[]>([]);
@@ -105,7 +111,7 @@ export default function Simulacao() {
 
   useEffect(() => {
     scrollToBottom();
-  }, [history, finalTextBuffer, interimText, loadingReply]);
+  }, [history, loadingReply]);
 
   const speakText = (text: string) => {
     if ("speechSynthesis" in window) {
@@ -265,7 +271,10 @@ export default function Simulacao() {
 
 
         {/* Chat */}
-        <div className="col-span-1 md:col-span-2 flex flex-col bg-white border border-slate-200 rounded-2xl shadow-sm overflow-y-auto p-4 md:p-8 custom-scrollbar [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-slate-300 [&::-webkit-scrollbar-thumb]:rounded-full hover:[&::-webkit-scrollbar-thumb]:bg-slate-400">
+        <div 
+          ref={chatContainerRef}
+          className="col-span-1 md:col-span-2 flex flex-col bg-white border border-slate-200 rounded-2xl shadow-sm overflow-y-auto p-4 md:p-8 custom-scrollbar [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-slate-300 [&::-webkit-scrollbar-thumb]:rounded-full hover:[&::-webkit-scrollbar-thumb]:bg-slate-400"
+        >
           <div className="flex flex-col gap-6">
             {history.length === 0 && !loadingReply && (
               <div className="text-center text-slate-400 py-20 flex flex-col items-center">
