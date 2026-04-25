@@ -418,6 +418,131 @@ async def fase1_chat(request: Fase1ChatRequest, current_user: dict = Depends(get
     }
 
 
+@app.get("/dashboard/stats", tags=["Simulados"])
+async def get_dashboard_stats(current_user: dict = Depends(get_current_user)):
+    user_id = str(current_user["_id"])
+    
+    # 1. Estatísticas de Fase 1 (Objetiva)
+    fase1_sessions_cursor = database.db.simulado_sessions.find({
+        "user_id": user_id,
+        "status": "finished"
+    })
+    
+    total_questions = 0
+    total_correct = 0
+    total_time_seconds = 0
+    sessions_count = 0
+    
+    # Dicionário para consolidar maestria por área
+    # { "Theme": { "correct": 0, "total": 0 } }
+    area_mastery = {}
+    
+    recent_fase1 = []
+    
+    async for s in fase1_sessions_cursor:
+        res = s.get("result", {})
+        total_questions += res.get("total_questions", 0)
+        total_correct += res.get("correct_answers", 0)
+        total_time_seconds += s.get("elapsed_time", 0)
+        sessions_count += 1
+        
+        # Consolidar temas
+        theme_metrics = res.get("theme_metrics", {})
+        for theme, metrics in theme_metrics.items():
+            if theme not in area_mastery:
+                area_mastery[theme] = {"correct": 0, "total": 0}
+            area_mastery[theme]["correct"] += metrics.get("correct", 0)
+            area_mastery[theme]["total"] += metrics.get("total", 0)
+            
+        recent_fase1.append({
+            "id": str(s["_id"]),
+            "title": f"Simulado {(s.get('exam_id') or 'Personalizado').replace('_', ' ')}",
+            "type": "Fase 1",
+            "date": s.get("created_at") or datetime.now(timezone.utc),
+            "score": f"{res.get('correct_answers', 0)}/{res.get('total_questions', 0)}",
+            "timestamp": s.get("created_at") or datetime.now(timezone.utc)
+        })
+
+    # 2. Estatísticas de Fase 2 (Prática)
+    fase2_sessions_cursor = database.db.sessions.find({
+        "user_id": user_id,
+        "feedback": {"$ne": None}
+    })
+    
+    cases_completed = 0
+    recent_fase2 = []
+    
+    async for s in fase2_sessions_cursor:
+        cases_completed += 1
+        case = await database.db.cases.find_one({"_id": ObjectId(s["case_id"])})
+        
+        # Tentar extrair nota do feedback (ex: "Nota: 8.5/10" ou similar)
+        # Como é texto livre da IA, vamos apenas colocar um placeholder ou buscar padrão
+        score = "Concluído"
+        feedback = s.get("feedback", "")
+        import re
+        score_match = re.search(r"Nota:?\s*(\d+[\.,]?\d*)\s*/\s*10", feedback)
+        if score_match:
+            score = f"{score_match.group(1)}/10"
+            
+        recent_fase2.append({
+            "id": str(s["_id"]),
+            "title": case.get("title") if case else "Caso Clínico",
+            "type": "Fase 2",
+            "date": s.get("created_at") or "Finalizado",
+            "score": score,
+            "timestamp": s.get("created_at") or datetime.now(timezone.utc)
+        })
+
+    # Consolidar Atividade Recente (Top 5)
+    all_combined = recent_fase1 + recent_fase2
+    
+    def normalize_dt(dt):
+        if not dt:
+            return datetime.min.replace(tzinfo=timezone.utc)
+        if isinstance(dt, str): # Caso a data venha como string
+            return datetime.min.replace(tzinfo=timezone.utc)
+        if dt.tzinfo is None:
+            return dt.replace(tzinfo=timezone.utc)
+        return dt
+
+    all_recent = sorted(all_combined, key=lambda x: normalize_dt(x["timestamp"]), reverse=True)
+    all_recent = all_recent[:5]
+
+    # Calcular porcentagem geral
+    performance = 0
+    if total_questions > 0:
+        performance = round((total_correct / total_questions) * 100)
+    
+    # Formatar maestria por área
+    mastery_list = []
+    for area, data in area_mastery.items():
+        pct = round((data["correct"] / data["total"]) * 100) if data["total"] > 0 else 0
+        mastery_list.append({
+            "area": area,
+            "progress": pct
+        })
+    
+    # Se não tiver dados de maestria, retornar os temas padrão com 0%
+    if not mastery_list:
+        themes_cursor = await database.db.questions.distinct("theme")
+        mastery_list = [{"area": t, "progress": 0} for t in themes_cursor[:5]]
+
+    return {
+        "stats": [
+            { "label": "Questões Respondidas", "value": f"{total_questions:,}".replace(",", "."), "icon": "BookOpen", "color": "text-blue-500", "trend": f"{sessions_count} simulados" },
+            { "label": "Desempenho Geral", "value": f"{performance}%", "icon": "Target", "color": "text-emerald-500", "trend": "Fase 1" },
+            { "label": "Horas de Estudo", "value": f"{total_time_seconds // 3600}h", "icon": "Clock", "color": "text-amber-500", "trend": "Estimado" },
+            { "label": "Casos Concluídos", "value": str(cases_completed), "icon": "CheckCircle", "color": "text-indigo-500", "trend": "Fase 2 Prática" },
+        ],
+        "recent_activity": [
+            {**act, "timestamp": normalize_dt(act["timestamp"]).isoformat()} 
+            for act in all_recent
+        ],
+        "area_mastery": mastery_list[:5]
+    }
+
+
 @app.get("/history", tags=["Simulados"])
 async def get_history(current_user: dict = Depends(get_current_user)):
     user_id = str(current_user["_id"])

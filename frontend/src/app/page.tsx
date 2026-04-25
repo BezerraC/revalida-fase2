@@ -1,6 +1,7 @@
 "use client";
 
-import React from "react";
+import { useState, useEffect } from "react";
+import api from "@/lib/api";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
 import { 
@@ -19,23 +20,58 @@ import Link from "next/link";
 export default function Home() {
   const router = useRouter();
   const { user } = useAuth();
+  const [loading, setLoading] = useState(true);
+  const [stats, setStats] = useState<any[]>([]);
+  const [recentActivity, setRecentActivity] = useState<any[]>([]);
+  const [areaMastery, setAreaMastery] = useState<any[]>([]);
 
-  // Mock statistics data
-  const stats = [
-    { label: "Questões Respondidas", value: "1,240", icon: <BookOpen className="text-blue-500" />, trend: "+12% esta semana" },
-    { label: "Desempenho Geral", value: "78%", icon: <Target className="text-emerald-500" />, trend: "Top 5% dos alunos" },
-    { label: "Horas de Estudo", value: "45h", icon: <Clock className="text-amber-500" />, trend: "Meta: 50h/mês" },
-    { label: "Casos Concluídos", value: "24", icon: <CheckCircle className="text-indigo-500" />, trend: "Fase 2 Prática" },
-  ];
+  useEffect(() => {
+    async function loadStats() {
+      try {
+        const res = await api.get("/dashboard/stats");
+        setStats(res.data.stats);
+        setRecentActivity(res.data.recent_activity);
+        setAreaMastery(res.data.area_mastery);
+      } catch (err) {
+        console.error("Erro ao carregar estatísticas:", err);
+      } finally {
+        setLoading(false);
+      }
+    }
+    loadStats();
+  }, []);
 
-  const recentActivity = [
-    { id: 1, title: "Simulado Revalida 2024.2", type: "Fase 1", date: "Há 2 horas", score: "82/100" },
-    { id: 2, title: "Caso Clínico: Pré-eclâmpsia", type: "Fase 2", date: "Ontem", score: "9.5/10" },
-    { id: 3, title: "Pediatria: Crescimento e Desenv.", type: "Fase 1", date: "2 dias atrás", score: "18/20" },
-  ];
+  const getIcon = (name: string, colorClass: string) => {
+    switch (name) {
+      case "BookOpen": return <BookOpen className={colorClass} />;
+      case "Target": return <Target className={colorClass} />;
+      case "Clock": return <Clock className={colorClass} />;
+      case "CheckCircle": return <CheckCircle className={colorClass} />;
+      default: return <Activity className={colorClass} />;
+    }
+  };
+
+  const getAreaColor = (area: string) => {
+    const colors: Record<string, string> = {
+      "Clínica Médica": "bg-blue-500",
+      "Cirurgia Geral": "bg-red-500",
+      "Ginecologia e Obstetrícia": "bg-pink-500",
+      "Pediatria": "bg-amber-500",
+      "Saúde Coletiva": "bg-emerald-500",
+    };
+    return colors[area] || "bg-indigo-500";
+  };
+
+  if (loading) {
+      return (
+          <div className="flex items-center justify-center min-h-[60vh]">
+              <Activity className="w-12 h-12 text-indigo-600 animate-spin" />
+          </div>
+      );
+  }
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-12 p-8">
+    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-12 p-8 animate-in fade-in duration-700">
       {/* Hero Section */}
       <section className="relative overflow-hidden rounded-[2.5rem] bg-gradient-to-br from-indigo-600 via-indigo-700 to-violet-800 p-8 md:p-12 text-white shadow-2xl">
         <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-8">
@@ -109,7 +145,7 @@ export default function Home() {
           {stats.map((stat, idx) => (
             <div key={idx} className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm hover:shadow-md transition-shadow">
               <div className="flex items-center justify-between mb-4">
-                <div className="p-2 bg-gray-50 rounded-xl">{stat.icon}</div>
+                <div className="p-2 bg-gray-50 rounded-xl">{getIcon(stat.icon, stat.color)}</div>
                 <span className="text-[10px] font-bold text-emerald-600 bg-emerald-50 px-2 py-1 rounded-full">{stat.trend}</span>
               </div>
               <p className="text-sm font-medium text-gray-500 mb-1">{stat.label}</p>
@@ -130,13 +166,15 @@ export default function Home() {
             </h2>
           </div>
           <div className="divide-y divide-gray-50">
-            {recentActivity.map((activity) => (
+            {recentActivity.length > 0 ? recentActivity.map((activity) => (
               <div key={activity.id} className="p-6 hover:bg-gray-50 transition-colors flex items-center justify-between group">
                 <div className="flex items-center gap-4">
                   <div className={`w-2 h-2 rounded-full ${activity.type === "Fase 1" ? "bg-blue-500" : "bg-violet-500"}`} />
                   <div>
                     <h4 className="text-sm font-bold text-gray-900">{activity.title}</h4>
-                    <p className="text-xs text-gray-500">{activity.type} • {activity.date}</p>
+                    <p className="text-xs text-gray-500">
+                      {activity.type} • {activity.timestamp ? new Date(activity.timestamp).toLocaleDateString('pt-BR') : 'Concluído'}
+                    </p>
                   </div>
                 </div>
                 <div className="flex items-center gap-4">
@@ -146,7 +184,11 @@ export default function Home() {
                   <ChevronRight size={16} className="text-gray-300 group-hover:text-indigo-400 group-hover:translate-x-1 transition-all" />
                 </div>
               </div>
-            ))}
+            )) : (
+                <div className="p-12 text-center text-slate-400">
+                    <p className="text-sm">Nenhuma atividade recente registrada.</p>
+                </div>
+            )}
           </div>
         </section>
 
@@ -154,13 +196,7 @@ export default function Home() {
         <section className="bg-white rounded-3xl border border-gray-100 shadow-sm p-6">
           <h2 className="font-bold text-gray-900 mb-6">Domínio por Área</h2>
           <div className="space-y-6">
-            {[
-              { area: "Clínica Médica", color: "bg-blue-500", progress: 85 },
-              { area: "Cirurgia Geral", color: "bg-red-500", progress: 62 },
-              { area: "Ginecologia e Obstetrícia", color: "bg-pink-500", progress: 78 },
-              { area: "Pediatria", color: "bg-amber-500", progress: 92 },
-              { area: "Saúde Coletiva", color: "bg-emerald-500", progress: 70 },
-            ].map((area) => (
+            {areaMastery.map((area) => (
               <div key={area.area}>
                 <div className="flex justify-between text-xs font-bold mb-2">
                   <span className="text-gray-700">{area.area}</span>
@@ -168,7 +204,7 @@ export default function Home() {
                 </div>
                 <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
                   <div 
-                    className={`h-full ${area.color} rounded-full transition-all duration-1000`} 
+                    className={`h-full ${getAreaColor(area.area)} rounded-full transition-all duration-1000`} 
                     style={{ width: `${area.progress}%` }}
                   />
                 </div>
