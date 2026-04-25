@@ -231,6 +231,7 @@ export default function Simulacao() {
     return () => {
       if (silenceTimeoutRef.current) clearTimeout(silenceTimeoutRef.current);
       if (recognitionRef.current) recognitionRef.current.stop();
+      if (typeof window !== "undefined") window.speechSynthesis.cancel();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
