@@ -47,6 +47,16 @@ export default function AdminReportsPage() {
     }
   };
 
+  const updateReportStatus = async (id: string, newStatus: string) => {
+    try {
+      await api.patch(`/admin/reports/${id}`, { status: newStatus });
+      setReports(prev => prev.map(r => r._id === id ? { ...r, status: newStatus } : r));
+    } catch (err) {
+      console.error("Erro ao atualizar status:", err);
+      alert("Erro ao atualizar status do reporte.");
+    }
+  };
+
   const filteredReports = reports.filter(report => {
     const matchesSearch = 
       report.reason.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -183,12 +193,31 @@ export default function AdminReportsPage() {
                     </td>
                     <td className="px-8 py-6">
                       <div className="flex items-center justify-end gap-2">
-                        {/* No futuro podemos adicionar um link para ver a questão no simulado */}
+                        {report.status === "pending" ? (
+                          <>
+                            <button 
+                              onClick={() => updateReportStatus(report._id, "resolved")}
+                              className="px-4 py-2 bg-emerald-50 text-emerald-600 rounded-xl text-[10px] font-black uppercase tracking-widest border border-emerald-100 hover:bg-emerald-600 hover:text-white transition-all"
+                            >
+                              Resolver
+                            </button>
+                            <button 
+                              onClick={() => updateReportStatus(report._id, "dismissed")}
+                              className="px-4 py-2 bg-slate-50 text-slate-400 rounded-xl text-[10px] font-black uppercase tracking-widest border border-slate-100 hover:bg-slate-200 hover:text-slate-600 transition-all"
+                            >
+                              Ignorar
+                            </button>
+                          </>
+                        ) : (
+                          <button 
+                            onClick={() => updateReportStatus(report._id, "pending")}
+                            className="px-4 py-2 bg-slate-50 text-slate-400 rounded-xl text-[10px] font-black uppercase tracking-widest border border-slate-100 hover:bg-slate-200 hover:text-slate-600 transition-all"
+                          >
+                            Reabrir
+                          </button>
+                        )}
                         <button className="p-2 hover:bg-white rounded-lg border border-transparent hover:border-slate-200 transition-all text-slate-400 hover:text-blue-600" title="Ver Questão">
                           <ExternalLink className="w-4 h-4" />
-                        </button>
-                        <button className="p-2 hover:bg-white rounded-lg border border-transparent hover:border-slate-200 transition-all text-slate-400 hover:text-slate-600">
-                          <MoreVertical className="w-4 h-4" />
                         </button>
                       </div>
                     </td>

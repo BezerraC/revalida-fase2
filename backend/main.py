@@ -618,6 +618,20 @@ async def get_all_reports(current_user: dict = Depends(get_current_admin)):
         reports.append(doc)
     return reports
 
+@app.patch("/admin/reports/{report_id}", tags=["Metadata"])
+async def update_report_status(
+    report_id: str, 
+    status: str = Body(..., embed=True),
+    current_user: dict = Depends(get_current_admin)
+):
+    result = await database.db.question_reports.update_one(
+        {"_id": ObjectId(report_id)},
+        {"$set": {"status": status}}
+    )
+    if result.modified_count == 0:
+        raise HTTPException(status_code=404, detail="Reporte não encontrado")
+    return {"message": f"Reporte marcado como {status}"}
+
 @app.get("/exams", tags=["Metadata"])
 async def get_unique_exams(current_user: dict = Depends(get_current_user)):
     # Retorna uma lista única de exam_ids presentes no banco
