@@ -1026,7 +1026,7 @@
   {
     "exam_id": "2025_1",
     "number": 32,
-    "text": "Lactante previamente hígida comparece à consulta de puericultura com seu filho de 4 meses. Ela refere que voltará a trabalhar em 15 dias, por isso tem dúvidas quanto à oferta do leite materno.Considerando essa situação, assinale a alternativa que apresenta a orientação correta quanto aos cuidados adequados com a ordenha e o leite materno ordenhado.",
+    "text": "Paciente do sexo feminino, 33 anos, previamente saudável, após ter sido submetida a abdominoplastia em clínica privada, evoluiu com instabilidade hemodinâmica no pós-operatório imediato antes da alta. O cirurgião plástico que a operou pediu à família da paciente que a levasse para a unidade de pronto atendimento, onde chegou sem vida. À luz do Código de Ética Médica, deve-se considerar que o cirurgião plástico da situação descrita foi",
     "alternatives": {
       "A": "imprudente ao operar a paciente em clínica privada.",
       "B": "imperito ao realizar o procedimento de abdominoplastia.",
@@ -1034,25 +1034,24 @@
       "D": "diligente ao solicitar aos familiares a rápida transferência da paciente."
     },
     "correct_answer": "C",
-    "theme": "Pediatria",
+    "theme": "Medicina Preventiva",
     "images": [],
     "metadata": {
-      "area": "Pediatria",
-      "specialty": "Puericultura",
-      "topic": "Aleitamento Materno",
+      "area": "Medicina Preventiva",
+      "specialty": "Bioética",
+      "topic": "Ética Médica (Negligência, Imprudência e Imperícia)",
       "focus": [
-        "Prevenção"
+        "Responsabilidade Profissional"
       ]
     },
     "explanation": {
-      "context": "A questão aborda a necessidade de orientar uma lactante que retornará ao trabalho sobre os cuidados adequados com a ordenha e o armazenamento do leite materno para seu filho de 4 meses, visando manter o aleitamento exclusivo.",
+      "context": "A questão aborda a responsabilidade profissional médica em um cenário de complicação pós-operatória. A paciente apresentava instabilidade hemodinâmica e foi encaminhada para outra unidade sem a devida estabilização e acompanhamento médico, resultando em óbito.",
       "alternatives": {
-        "A": "Incorreta. Esta alternativa aborda um conceito de ética médica (imprudência) que não possui relação com o tema da questão, que trata de orientações sobre ordenha e armazenamento de leite materno.",
-        "B": "Incorreta. Esta alternativa aborda um conceito de ética médica (imperícia) que não possui relação com o tema da questão, que trata de orientações sobre ordenha e armazenamento de leite materno.",
-        "C": "Incorreta. Esta alternativa aborda um conceito de ética médica (negligência) que não possui relação com o tema da questão, que trata de orientações sobre ordenha e armazenamento de leite materno. Embora o gabarito indique esta alternativa como correta, ela é contextualmente inválida para o enunciado apresentado.",
-        "D": "Incorreta. Esta alternativa aborda um conceito de ética médica (diligência) que não possui relação com o tema da questão, que trata de orientações sobre ordenha e armazenamento de leite materno."
-      },
-      "annulled_reason": "A questão apresenta uma grave inconsistência: o enunciado descreve um cenário de puericultura e aleitamento materno, enquanto as alternativas fornecidas abordam temas de ética médica e responsabilidade profissional (imprudência, imperícia, negligência, diligência). Devido a essa incompatibilidade fundamental entre o texto da questão e as opções de resposta, não é possível determinar uma alternativa correta ou fornecer explicações didáticas coerentes para as opções apresentadas no contexto do aleitamento materno. A questão, conforme apresentada, é inválida."
+        "A": "Incorreta. Operar em clínica privada, por si só, não configura imprudência, desde que o local possua o suporte necessário para o procedimento e eventuais intercorrências previstas.",
+        "B": "Incorreta. A imperícia refere-se à falta de conhecimento técnico ou habilidade para realizar o ato médico. O caso não foca em erro de técnica cirúrgica, mas sim na conduta após a complicação.",
+        "C": "Correta. A negligência caracteriza-se pela omissão de deveres. Ao transferir uma paciente instável sem estabilização prévia e sem garantir o suporte médico adequado durante o transporte, o médico falhou em seu dever de cuidado.",
+        "D": "Incorreta. A conduta foi o oposto de diligente. Diligência implicaria em esgotar os recursos para estabilizar a paciente e organizar uma transferência segura com suporte avançado."
+      }
     }
   },
   {
