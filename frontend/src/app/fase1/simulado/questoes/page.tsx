@@ -859,7 +859,7 @@ function ActiveSimuladoContent() {
                 if (isSelected) {
                   if (isAnnulled) {
                     variantClass = "bg-amber-100 border-amber-300 text-amber-800 shadow-lg shadow-amber-100";
-                  } else if (showFeedback && isConfirmed) {
+                  } else if (showFeedback) {
                     variantClass = isCorrectChoice
                       ? "bg-emerald-600 border-emerald-600 text-white shadow-xl shadow-emerald-200"
                       : "bg-red-600 border-red-600 text-white shadow-xl shadow-red-200";
@@ -868,8 +868,8 @@ function ActiveSimuladoContent() {
                   } else {
                     variantClass = "bg-indigo-600 border-indigo-600 text-white shadow-2xl shadow-indigo-200 -translate-y-1";
                   }
-                } else if (showFeedback && isConfirmed && isCorrectChoice) {
-                  variantClass = "bg-emerald-50 border-emerald-500 text-emerald-700";
+                } else if (showFeedback && isCorrectChoice) {
+                  variantClass = "bg-emerald-50 border-emerald-500 text-emerald-700 shadow-sm";
                 }
 
                 return (
@@ -881,14 +881,14 @@ function ActiveSimuladoContent() {
                     >
                       <div className={`w-12 h-12 rounded-2xl flex items-center justify-center font-black text-lg shrink-0 transition-all ${isSelected
                         ? (isPending ? "bg-indigo-600 text-white" : "bg-white/20 text-white")
-                        : "bg-slate-100 text-slate-400 group-hover/alt:bg-indigo-100 group-hover/alt:text-indigo-600"
+                        : (showFeedback && isCorrectChoice ? "bg-emerald-100 text-emerald-600" : "bg-slate-100 text-slate-400 group-hover/alt:bg-indigo-100 group-hover/alt:text-indigo-600")
                         }`}>
                         {letter}
                       </div>
                       <div className={`flex-1 pt-2.5 font-bold text-base md:text-lg leading-relaxed tracking-tight transition-colors duration-300 ${isEliminated ? 'line-through decoration-2 decoration-slate-400' : ''}`}>
                         {formatText(text)}
                       </div>
-                      {showFeedback && isConfirmed && isCorrectChoice && (
+                      {showFeedback && isCorrectChoice && (
                         <div className={`p-2 rounded-full shrink-0 ${isSelected ? "bg-white/20" : "bg-emerald-100"}`}>
                           <CheckCircle2 className={`w-6 h-6 ${isSelected ? "text-white" : "text-emerald-600"}`} />
                         </div>
