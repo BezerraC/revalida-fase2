@@ -286,8 +286,8 @@ export default function ProfilePage() {
             </div>
           </div>
 
-          {/* Quick Stats in Profile */}
-          <div className="bg-white rounded-[2.5rem] p-8 border border-gray-100 shadow-sm space-y-6">
+          {/* Quick Stats in Profile V2 */}
+          {/* <div className="bg-white rounded-[2.5rem] p-8 border border-gray-100 shadow-sm space-y-6">
             <h3 className="font-black text-gray-900 flex items-center gap-2">
               <Shield size={20} className="text-indigo-600" />
               Segurança
@@ -302,7 +302,7 @@ export default function ProfilePage() {
                 <span className="text-sm font-bold text-gray-500">2FA Desativado</span>
               </div>
             </div>
-          </div>
+          </div> */}
         </div>
 
         {/* Right Column: AI Config & Activity */}
