@@ -86,9 +86,7 @@ export default function Fase1Menu() {
 
   const handleStartTutor = async () => {
     try {
-      const res = await api.post("/fase1/chat", {
-        message: { text: "Olá Preceptor!" }
-      });
+      const res = await api.post("/fase1/sessions");
       if (res.data.session_id) {
         router.push(`/fase1/${res.data.session_id}`);
       }
