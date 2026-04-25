@@ -785,21 +785,6 @@ function ActiveSimuladoContent() {
                       <div className={`flex-1 pt-2.5 font-bold text-base md:text-lg leading-relaxed tracking-tight transition-colors duration-300 ${isEliminated ? 'line-through decoration-2 decoration-slate-400' : ''}`}>
                         {formatText(text)}
                       </div>
-
-                      {/* Botão de Eliminar (X) */}
-                      {!showFeedback && !showResults && (
-                        <button
-                          onClick={(e) => toggleEliminate(e, letter)}
-                          className={`absolute -right-2 -top-2 w-8 h-8 rounded-full border-2 flex items-center justify-center transition-all shadow-sm ${isEliminated
-                            ? "bg-red-500 border-red-500 text-white rotate-0"
-                            : "bg-white border-slate-200 text-slate-300 opacity-0 group-hover/alt:opacity-100 rotate-45 hover:bg-slate-50 hover:text-red-500"
-                            }`}
-                          title={isEliminated ? "Restaurar alternativa" : "Eliminar alternativa"}
-                        >
-                          <Slash className="w-4 h-4" />
-                        </button>
-                      )}
-
                       {showFeedback && isConfirmed && isCorrectChoice && (
                         <div className={`p-2 rounded-full shrink-0 ${isSelected ? "bg-white/20" : "bg-emerald-100"}`}>
                           <CheckCircle2 className={`w-6 h-6 ${isSelected ? "text-white" : "text-emerald-600"}`} />
@@ -811,6 +796,20 @@ function ActiveSimuladoContent() {
                         </div>
                       )}
                     </button>
+
+                      {/* Botão de Eliminar (X) - Agora como irmão do botão principal, não filho */}
+                      {!showFeedback && !showResults && (
+                        <button
+                          onClick={(e) => toggleEliminate(e, letter)}
+                          className={`absolute -right-2 -top-2 w-8 h-8 rounded-full border-2 flex items-center justify-center transition-all shadow-sm z-10 ${isEliminated
+                            ? "bg-red-500 border-red-500 text-white rotate-0"
+                            : "bg-white border-slate-200 text-slate-300 opacity-0 group-hover/alt:opacity-100 rotate-45 hover:bg-slate-50 hover:text-red-500"
+                            }`}
+                          title={isEliminated ? "Restaurar alternativa" : "Eliminar alternativa"}
+                        >
+                          <Slash className="w-4 h-4" />
+                        </button>
+                      )}
                   </div>
                 );
               })}
