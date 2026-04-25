@@ -640,11 +640,27 @@ async def create_simulado_session(
     
     # Buscar questões para fixar a ordem
     query = {}
-    if exam_id: query["exam_id"] = exam_id
-    if theme: query["theme"] = theme
-    if specialty: query["metadata.specialty"] = specialty
-    if topic: query["metadata.topic"] = topic
-    if focus: query["metadata.focus"] = {"$in": [focus]}
+    
+    def apply_filter(field, value):
+        if value:
+            if isinstance(value, list):
+                if "all" in value: return # Ignora se "all" estiver na lista
+                query[field] = {"$in": value}
+            elif value != "all":
+                query[field] = value
+
+    apply_filter("exam_id", exam_id)
+    apply_filter("theme", theme)
+    apply_filter("metadata.specialty", specialty)
+    apply_filter("metadata.topic", topic)
+    
+    # Focus é especial pois já é uma lista no banco
+    if focus:
+        if isinstance(focus, list):
+            if "all" not in focus:
+                query["metadata.focus"] = {"$in": focus}
+        elif focus != "all":
+            query["metadata.focus"] = {"$in": [focus]}
     
     questions_cursor = database.db.questions.find(query)
     question_ids = []

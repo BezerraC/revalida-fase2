@@ -45,7 +45,7 @@ export default function Fase2() {
   };
 
   return (
-    <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
+    <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 p-8">
       <header className="mb-12 text-center">
         <div className="flex justify-center items-center mb-4">
           <div className="bg-indigo-600 p-4 rounded-2xl shadow-xl shadow-indigo-200">

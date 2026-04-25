@@ -20,7 +20,7 @@ const MainLayout = ({ children }: MainLayoutProps) => {
   return (
     <>
       <Header />
-      <main className="flex-grow pt-24 pb-12">
+      <main className="flex-grow pt-[72px] pb-12">
         {children}
       </main>
       <Footer />
