@@ -92,6 +92,14 @@ async def get_cases(current_user: dict = Depends(get_current_user)):
 class CreateSessionRequest(BaseModel):
     case_id: str
 
+class QuestionReport(BaseModel):
+    reason: str
+    description: Optional[str] = None
+    question_id: str
+    user_email: str
+    created_at: datetime = datetime.utcnow()
+    status: str = "pending" # pending, resolved, dismissed
+
 @app.post("/auth/register", tags=["Auth"])
 async def register(user_data: UserRegistration):
     if user_data.password != user_data.confirm_password:
@@ -586,6 +594,29 @@ async def get_question(question_id: str, current_user: dict = Depends(get_curren
         raise HTTPException(status_code=404, detail="Questão não encontrada")
     q["_id"] = str(q["_id"])
     return q
+
+@app.post("/questions/{question_id}/report", tags=["Metadata"])
+async def report_question(
+    question_id: str, 
+    report: QuestionReport, 
+    current_user: dict = Depends(get_current_user)
+):
+    report_dict = report.dict()
+    report_dict["user_email"] = current_user["email"]
+    report_dict["question_id"] = question_id
+    report_dict["created_at"] = datetime.utcnow()
+    
+    result = await database.db.question_reports.insert_one(report_dict)
+    return {"message": "Reporte enviado com sucesso", "report_id": str(result.inserted_id)}
+
+@app.get("/admin/reports", tags=["Metadata"])
+async def get_all_reports(current_user: dict = Depends(get_current_admin)):
+    reports_cursor = database.db.question_reports.find().sort("created_at", -1)
+    reports = []
+    async for doc in reports_cursor:
+        doc["_id"] = str(doc["_id"])
+        reports.append(doc)
+    return reports
 
 @app.get("/exams", tags=["Metadata"])
 async def get_unique_exams(current_user: dict = Depends(get_current_user)):

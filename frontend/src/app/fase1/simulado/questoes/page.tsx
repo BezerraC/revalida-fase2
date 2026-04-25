@@ -21,7 +21,9 @@ import {
   Eraser,
   Undo2,
   Check,
-  Slash
+  Slash,
+  AlertTriangle,
+  Send
 } from "lucide-react";
 import api, { BASE_URL } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
@@ -51,6 +53,7 @@ interface Question {
 function ActiveSimuladoContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const { user, refreshUser } = useAuth();
 
   const sessionId = searchParams.get("session_id");
   const mode = searchParams.get("mode") || "treino";
@@ -60,7 +63,6 @@ function ActiveSimuladoContent() {
   const focus = searchParams.get("focus");
   const timeLimit = searchParams.get("time_limit"); // "free" ou "4h"
 
-  const { refreshUser } = useAuth();
 
   const [questions, setQuestions] = useState<Question[]>([]);
   const [loading, setLoading] = useState(true);
@@ -80,6 +82,12 @@ function ActiveSimuladoContent() {
   const [eliminated, setEliminated] = useState<Record<number, string[]>>({});
   const [pendingSelection, setPendingSelection] = useState<string | null>(null);
   const questionTextRef = useRef<HTMLDivElement>(null);
+
+  // Report States
+  const [showReportModal, setShowReportModal] = useState(false);
+  const [reportReason, setReportReason] = useState("");
+  const [reportDescription, setReportDescription] = useState("");
+  const [isReporting, setIsReporting] = useState(false);
 
   // Função para limpar e formatar o texto das questões
   const formatText = (text: string) => {
@@ -332,6 +340,30 @@ function ActiveSimuladoContent() {
     }
   };
 
+  const handleReportSubmit = async () => {
+    if (!reportReason) return;
+    
+    setIsReporting(true);
+    try {
+      const questionId = questions[currentIndex]._id;
+      await api.post(`/questions/${questionId}/report`, {
+        reason: reportReason,
+        description: reportDescription,
+        question_id: questionId,
+        user_email: user?.email || ""
+      });
+      
+      setShowReportModal(false);
+      setReportReason("");
+      setReportDescription("");
+      alert("Reporte enviado com sucesso! Nossa equipe irá revisar esta questão.");
+    } catch (err) {
+      console.error("Erro ao enviar reporte:", err);
+      alert("Erro ao enviar reporte. Tente novamente mais tarde.");
+    } finally {
+      setIsReporting(false);
+    }
+  };
   const formatTime = (seconds: number) => {
     const hours = Math.floor(seconds / 3600);
     const min = Math.floor((seconds % 3600) / 60);
@@ -608,6 +640,77 @@ function ActiveSimuladoContent() {
           </div>
         </div>
       )}
+      {/* Report Modal */}
+      {showReportModal && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-300">
+          <div className="relative bg-white rounded-[3rem] p-10 max-w-lg w-full shadow-2xl border border-white animate-in zoom-in-95 duration-300">
+            <button 
+              onClick={() => setShowReportModal(false)}
+              className="absolute top-8 right-8 p-2 hover:bg-slate-100 rounded-full transition-colors"
+            >
+              <XCircle className="w-6 h-6 text-slate-300" />
+            </button>
+
+            <div className="flex flex-col items-center text-center space-y-6">
+              <div className="w-20 h-20 bg-red-50 rounded-[1.8rem] flex items-center justify-center text-red-500">
+                <AlertTriangle className="w-10 h-10" />
+              </div>
+              
+              <div className="space-y-2">
+                <h3 className="text-2xl font-black text-slate-900 tracking-tight">Reportar Problema</h3>
+                <p className="text-slate-500 font-medium text-sm leading-relaxed">
+                  Encontrou algo errado? Informe-nos para que possamos corrigir e manter a qualidade do Med Master.
+                </p>
+              </div>
+
+              <div className="w-full space-y-5 text-left">
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Motivo do Reporte</label>
+                  <select 
+                    value={reportReason}
+                    onChange={(e) => setReportReason(e.target.value)}
+                    className="w-full p-4 bg-slate-50 border border-slate-100 rounded-2xl font-bold text-slate-700 outline-none focus:ring-2 focus:ring-indigo-500/20 transition-all"
+                  >
+                    <option value="">Selecione um motivo...</option>
+                    <option value="Erro no Enunciado">Erro no Enunciado</option>
+                    <option value="Gabarito Incorreto">Gabarito Incorreto</option>
+                    <option value="Imagem Corrompida/Faltando">Imagem Corrompida/Faltando</option>
+                    <option value="Explicação Confusa">Explicação Confusa</option>
+                    <option value="Outros">Outros</option>
+                  </select>
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Descrição Adicional</label>
+                  <textarea 
+                    value={reportDescription}
+                    onChange={(e) => setReportDescription(e.target.value)}
+                    placeholder="Detalhe o erro encontrado..."
+                    className="w-full h-32 p-5 bg-slate-50 border border-slate-100 rounded-2xl font-medium text-slate-700 outline-none focus:ring-2 focus:ring-indigo-500/20 transition-all resize-none"
+                  />
+                </div>
+              </div>
+
+              <div className="w-full grid grid-cols-2 gap-4">
+                <button 
+                  onClick={() => setShowReportModal(false)}
+                  className="py-4 rounded-2xl font-black text-slate-400 border-2 border-slate-100 hover:bg-slate-50 transition-all"
+                >
+                  Cancelar
+                </button>
+                <button 
+                  onClick={handleReportSubmit}
+                  disabled={!reportReason || isReporting}
+                  className="py-4 rounded-2xl font-black text-white bg-red-500 hover:bg-red-600 shadow-lg shadow-red-100 flex items-center justify-center gap-2 disabled:opacity-50 disabled:grayscale transition-all active:scale-95"
+                >
+                  {isReporting ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+                  Enviar Reporte
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Simulation Header */}
       <div className="bg-white/80 backdrop-blur-md border-b border-slate-100 px-6 md:px-12 py-5 flex items-center justify-between top-0 z-20 shadow-sm">
@@ -835,29 +938,28 @@ function ActiveSimuladoContent() {
 
                 <div className="h-1 w-12 bg-indigo-600 rounded-full" style={{ width: `${((currentIndex + 1) / questions.length) * 100}%` }} />
               </div>
-
-              <div className="flex gap-3">
-                <button
-                  onClick={() => setIsHighlighterActive(!isHighlighterActive)}
-                  className={`flex-1 flex items-center justify-center gap-2 py-4 rounded-2xl font-black text-[11px] uppercase tracking-widest transition-all ${isHighlighterActive
-                    ? "bg-yellow-400 text-slate-900 shadow-lg shadow-yellow-100 scale-[1.02]"
-                    : "bg-slate-50 text-slate-400 border border-slate-100 hover:bg-slate-100"
-                    }`}
-                >
-                  <Highlighter className={`w-4 h-4 ${isHighlighterActive ? "animate-bounce" : ""}`} />
-                  {isHighlighterActive ? "Marcador Ativo" : "Usar Marcador"}
-                </button>
-                {highlights[currentQ._id]?.length > 0 && (
+                <div className="flex gap-3">
                   <button
-                    onClick={undoLastHighlight}
-                    className="p-4 bg-slate-50 text-slate-400 rounded-2xl hover:bg-red-50 hover:text-red-500 transition-all border border-slate-100 flex items-center gap-2"
-                    title="Desfazer Último Destaque"
+                    onClick={() => setIsHighlighterActive(!isHighlighterActive)}
+                    className={`flex-1 flex items-center justify-center gap-2 py-4 rounded-2xl font-black text-[11px] uppercase tracking-widest transition-all ${isHighlighterActive
+                      ? "bg-yellow-400 text-slate-900 shadow-lg shadow-yellow-100 scale-[1.02]"
+                      : "bg-slate-50 text-slate-400 border border-slate-100 hover:bg-slate-100"
+                      }`}
                   >
-                    <Undo2 className="w-4 h-4" />
-                    <span className="text-[9px] font-black uppercase">Desfazer</span>
+                    <Highlighter className={`w-4 h-4 ${isHighlighterActive ? "animate-bounce" : ""}`} />
+                    {isHighlighterActive ? "Marcador Ativo" : "Usar Marcador"}
                   </button>
-                )}
-              </div>
+                  {highlights[currentQ._id]?.length > 0 && (
+                    <button
+                      onClick={undoLastHighlight}
+                      className="p-4 bg-slate-50 text-slate-400 rounded-2xl hover:bg-red-50 hover:text-red-500 transition-all border border-slate-100 flex items-center gap-2"
+                      title="Desfazer Último Destaque"
+                    >
+                      <Undo2 className="w-4 h-4" />
+                      <span className="text-[9px] font-black uppercase">Desfazer</span>
+                    </button>
+                  )}
+                </div>
 
               <div className="space-y-5">
                 <div className="flex items-center justify-between py-4 border-b border-slate-50">
@@ -870,7 +972,14 @@ function ActiveSimuladoContent() {
                 </div>
               </div>
 
-              <div className="">
+              <div className="pt-2">
+                <button
+                  onClick={() => setShowReportModal(true)}
+                  className="w-full flex items-center justify-center gap-2 py-4 rounded-2xl font-black text-[10px] uppercase tracking-widest text-red-400 hover:bg-red-50 hover:text-red-600 transition-all border border-transparent hover:border-red-100 mb-4"
+                >
+                  <AlertTriangle className="w-4 h-4" />
+                  Reportar Erro na Questão
+                </button>
                 {/* Confirm Button */}
                 {pendingSelection && (
                   <div className="animate-in slide-in-from-bottom-5 duration-500 mb-3">

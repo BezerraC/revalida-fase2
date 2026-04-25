@@ -14,7 +14,9 @@ import {
   Activity, 
   Menu, 
   X,
-  ChevronRight
+  ChevronRight,
+  AlertTriangle,
+  UserCircle
 } from "lucide-react";
 
 export default function AdminLayout({
@@ -44,6 +46,7 @@ export default function AdminLayout({
     { label: "Dashboard", icon: LayoutDashboard, href: "/admin" },
     { label: "Usuários", icon: Users, href: "/admin/usuarios" },
     { label: "Cenários Clínicos", icon: BookOpen, href: "/admin/casos" },
+    { label: "Reportes", icon: AlertTriangle, href: "/admin/reports" },
     { label: "Auditoria", icon: Activity, href: "/admin/auditoria" },
   ];
 
@@ -128,4 +131,3 @@ export default function AdminLayout({
   );
 }
 
-import { UserCircle } from "lucide-react";
