@@ -222,7 +222,7 @@ function HistoricoPage() {
                   <h3 className="text-xl font-black text-slate-400 uppercase tracking-widest">Nenhuma simulação prática encontrada</h3>
                </div>
             ) : (
-               <div className="flex flex-col gap-5 animate-in fade-in slide-in-from-bottom-8 duration-500">
+               <div className="flex flex-col gap-5 animate-in">
                   {fase2History.map(item => (
                      <div key={item.session_id} className="bg-white rounded-[2.5rem] p-8 shadow-sm border border-slate-100 hover:shadow-xl hover:-translate-y-1 transition-all group flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
                         <div className="flex-1 space-y-3">
@@ -264,7 +264,7 @@ function HistoricoPage() {
                   <h3 className="text-xl font-black text-slate-400 uppercase tracking-widest">Nenhum simulado concluído</h3>
                </div>
             ) : (
-               <div className="flex flex-col gap-5 animate-in fade-in slide-in-from-bottom-8 duration-500">
+               <div className="flex flex-col gap-5 animate-in">
                   {simuladoHistory.map(item => (
                      <div key={item.session_id} className="bg-white rounded-[2.5rem] p-8 shadow-sm border border-slate-100 hover:shadow-xl hover:-translate-y-1 transition-all group flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
                         <div className="flex-1 space-y-3">
@@ -338,7 +338,7 @@ function HistoricoPage() {
                   <h3 className="text-xl font-black text-slate-400 uppercase tracking-widest">Nenhuma tutoria iniciada</h3>
                </div>
             ) : (
-               <div className="flex flex-col gap-5 animate-in fade-in slide-in-from-bottom-8 duration-500">
+               <div className="flex flex-col gap-5 animate-in">
                   {fase1History.map(item => (
                      <div key={item.session_id} className="bg-white rounded-[2.5rem] p-8 shadow-sm border border-slate-100 hover:shadow-xl hover:-translate-y-1 transition-all flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
                         <div className="flex-1 space-y-3">
