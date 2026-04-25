@@ -973,13 +973,7 @@ function ActiveSimuladoContent() {
               </div>
 
               <div className="pt-2">
-                <button
-                  onClick={() => setShowReportModal(true)}
-                  className="w-full flex items-center justify-center gap-2 py-4 rounded-2xl font-black text-[10px] uppercase tracking-widest text-red-400 hover:bg-red-50 hover:text-red-600 transition-all border border-transparent hover:border-red-100 mb-4"
-                >
-                  <AlertTriangle className="w-4 h-4" />
-                  Reportar Erro na Questão
-                </button>
+               
                 {/* Confirm Button */}
                 {pendingSelection && (
                   <div className="animate-in slide-in-from-bottom-5 duration-500 mb-3">
@@ -1002,9 +996,13 @@ function ActiveSimuladoContent() {
                   </span>
                   <ArrowRight className="w-6 h-6 group-hover:translate-x-1.5 transition-transform" />
                 </button>
-                <p className="text-center text-[10px] font-bold text-slate-300 uppercase tracking-[0.2em] mt-6">
-                  Sua resposta é salva automaticamente
-                </p>
+                 <button
+                  onClick={() => setShowReportModal(true)}
+                  className="w-full flex items-center justify-center gap-2 font-black text-[10px] uppercase tracking-widest text-red-400 hover:text-red-600 transition-all border border-transparent mt-3"
+                >
+                  <AlertTriangle className="w-4 h-4" />
+                  Reportar Erro na Questão
+                </button>
               </div>
             </div>
 
