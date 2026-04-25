@@ -315,6 +315,10 @@ async def get_feedback(session_id: str, current_user: dict = Depends(get_current
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
         
+    # Se já existir feedback gerado, retorna o que está no banco para evitar nova chamada à API
+    if session.get("feedback"):
+        return {"feedback": session["feedback"]}
+        
     case = await database.db.cases.find_one({"_id": ObjectId(session["case_id"])})
     if not case:
         raise HTTPException(status_code=404, detail="O cenário clínico desta sessão foi apagado no servidor.")
