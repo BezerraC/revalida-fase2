@@ -14,11 +14,11 @@ async def get_patient_response(system_prompt: str, history: List[ChatTurn], user
         "temperature": 0.5,
         "top_p": 0.95,
         "top_k": 64,
-        "max_output_tokens": 8192,
+        "max_output_tokens": 2048,
     }
     
     model = genai.GenerativeModel(
-        model_name="gemini-2.5-flash", # Corrigido para a versão estável atual ou preferida
+        model_name="gemini-2.5-flash-lite", # Corrigido para a versão estável atual ou preferida
         generation_config=generation_config,
         system_instruction=system_prompt,
     )
@@ -39,7 +39,7 @@ async def get_patient_response(system_prompt: str, history: List[ChatTurn], user
 
 async def generate_feedback(case: CaseModel, history: List[ChatTurn], api_key: str) -> str:
     configure_genai(api_key)
-    model = genai.GenerativeModel(model_name="gemini-2.5-flash")
+    model = genai.GenerativeModel(model_name="gemini-2.5-flash-lite")
     
     conversation_text = ""
     for turn in history:
@@ -75,7 +75,7 @@ async def generate_feedback(case: CaseModel, history: List[ChatTurn], api_key: s
 async def generate_fase1_chat(user_message: str, history: List[ChatTurn], api_key: str) -> dict:
     configure_genai(api_key)
     model = genai.GenerativeModel(
-        model_name="gemini-2.5-flash",
+        model_name="gemini-2.5-flash-lite",
         generation_config={"response_mime_type": "application/json"}
     )
     
@@ -103,8 +103,31 @@ Aqui está o histórico recente da conversa:
         response = await model.generate_content_async(prompt)
         text = response.text.strip()
         
-        parsed = json.loads(text)
-        return parsed
+        # Limpeza caso o modelo retorne blocos de código markdown mesmo com JSON mode
+        if "```" in text:
+            text = text.split("```")[1]
+            if text.startswith("json"):
+                text = text[len("json"):].strip()
+            text = text.strip().split("```")[0].strip()
+        
+        # Tratamento para chaves duplicadas no final (comum em alguns modelos flash)
+        text = text.strip()
+        if text.count('{') == 1 and text.count('}') > 1:
+            # Se houver apenas um objeto abrindo mas vários fechando, pega até o primeiro fechamento válido
+            # ou simplesmente remove o último } se ele for duplicado
+            while text.endswith("}}"):
+                text = text[:-1].strip()
+
+        try:
+            parsed = json.loads(text)
+            return parsed
+        except json.JSONDecodeError as je:
+            print(f"Erro de decodificação JSON. Texto recebido: {text}")
+            # Fallback em caso de JSON malformado mas que contenha o conteúdo
+            return {
+                "reply": "Ocorreu um erro ao formatar a resposta técnica, mas estou aqui para ajudar. Pode repetir a dúvida?",
+                "document": ""
+            }
     except Exception as e:
         print(f"Erro no gemini ao gerar fase 1: {e}")
         if "429" in str(e) or "quota" in str(e).lower():
