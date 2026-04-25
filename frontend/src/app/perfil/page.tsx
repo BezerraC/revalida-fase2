@@ -50,10 +50,6 @@ export default function ProfilePage() {
   const { user, logout, loading, refreshUser } = useAuth();
   const router = useRouter();
   
-  const [apiKey, setApiKey] = useState("");
-  const [isSavingKey, setIsSavingKey] = useState(false);
-  const [saveKeySuccess, setSaveKeySuccess] = useState(false);
-
   const [activeSessions, setActiveSessions] = useState<SimuladoSession[]>([]);
   const [isLoadingSessions, setIsLoadingSessions] = useState(true);
 
@@ -80,7 +76,6 @@ export default function ProfilePage() {
 
   useEffect(() => {
     if (user) {
-      setApiKey(user.gemini_api_key || "");
       setEditName(user.full_name || "");
       setEditEmail(user.email || "");
       loadActiveSessions();
@@ -100,7 +95,7 @@ export default function ProfilePage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+      <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-slate-900">
         <Activity className="w-12 h-12 text-indigo-600 animate-spin" />
       </div>
     );
@@ -110,21 +105,6 @@ export default function ProfilePage() {
     router.push("/login");
     return null;
   }
-
-  const handleSaveApiKey = async () => {
-    setIsSavingKey(true);
-    setSaveKeySuccess(false);
-    try {
-      await api.patch("/auth/profile/api-key", { api_key: apiKey });
-      await refreshUser();
-      setSaveKeySuccess(true);
-      setTimeout(() => setSaveKeySuccess(false), 3000);
-    } catch (error) {
-      console.error("Erro ao salvar chave:", error);
-    } finally {
-      setIsSavingKey(false);
-    }
-  };
 
   const handleUpdateProfile = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -328,54 +308,6 @@ export default function ProfilePage() {
         {/* Right Column: AI Config & Activity */}
         <div className="lg:col-span-2 space-y-8">
           
-          {/* AI API Configuration */}
-          <section className="bg-gray-900 rounded-[2.5rem] p-8 md:p-10 text-white relative overflow-hidden group shadow-2xl">
-            <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-500/10 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2" />
-            <div className="relative z-10">
-              <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-8">
-                <div className="space-y-2">
-                  <h2 className="text-2xl font-black flex items-center gap-3">
-                    <Sparkles className="text-indigo-400" />
-                    Inteligência Artificial
-                  </h2>
-                  <p className="text-gray-400 font-medium text-sm">Configure sua chave Gemini para habilitar o Preceptor IA e as simulações.</p>
-                </div>
-                <a 
-                  href="https://aistudio.google.com/app/apikey" 
-                  target="_blank" 
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center gap-2 text-xs font-black text-indigo-400 bg-indigo-500/10 px-4 py-2 rounded-xl border border-indigo-500/20 hover:bg-indigo-500/20 transition-all uppercase tracking-widest"
-                >
-                  <ExternalLink size={14} />
-                  Obter Chave
-                </a>
-              </div>
-
-              <div className="flex flex-col sm:flex-row gap-4">
-                <div className="flex-1 relative group">
-                  <Key className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-600 group-focus-within:text-indigo-400 transition-colors" />
-                  <input 
-                    type="password"
-                    value={apiKey}
-                    onChange={(e) => setApiKey(e.target.value)}
-                    placeholder="Sua Gemini API Key"
-                    className="w-full bg-gray-800 border border-gray-700 text-white pl-12 pr-12 py-4 rounded-2xl focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all font-mono text-sm"
-                  />
-                  {saveKeySuccess && (
-                    <CheckCircle className="absolute right-4 top-1/2 -translate-y-1/2 text-emerald-400 animate-in zoom-in" size={20} />
-                  )}
-                </div>
-                <button 
-                  onClick={handleSaveApiKey}
-                  disabled={isSavingKey}
-                  className="bg-indigo-600 hover:bg-indigo-500 disabled:bg-gray-800 text-white px-8 py-4 rounded-2xl font-black transition-all active:scale-95 shadow-lg shadow-indigo-900/40"
-                >
-                  {isSavingKey ? "Salvando..." : saveKeySuccess ? "Salvo!" : "Salvar Chave"}
-                </button>
-              </div>
-            </div>
-          </section>
-
           {/* Active Sessions */}
           {activeSessions.length > 0 && (
             <section className="bg-white rounded-[2.5rem] p-8 border border-gray-100 shadow-xl overflow-hidden">
@@ -411,7 +343,7 @@ export default function ProfilePage() {
                         </button>
                         <button 
                           onClick={() => handleDeleteSession(session._id)}
-                          className="p-2 text-gray-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all"
+                          className="p-2 text-slate-300 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-all"
                           title="Excluir progresso"
                         >
                           <Trash2 size={16} />
