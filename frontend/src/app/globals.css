@@ -56,7 +56,33 @@ body {
     background: #e2e8f0;
     border-radius: 10px;
   }
-  .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-    background: #cbd5e1;
+  .chalkboard {
+    background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
+    position: relative;
+    box-shadow: inset 0 0 100px rgba(0,0,0,0.5);
+  }
+
+  .chalkboard::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background-image: url("https://www.transparenttextures.com/patterns/asfalt-light.png");
+    opacity: 0.1;
+    pointer-events: none;
+  }
+
+  .chalk-text {
+    text-shadow: 0 0 2px rgba(255,255,255,0.3);
+    filter: drop-shadow(0 0 1px rgba(255,255,255,0.2));
+  }
+
+  @keyframes typewriter-blink {
+    from, to { border-color: transparent }
+    50% { border-color: white }
+  }
+
+  .cursor-blink {
+    border-right: 2px solid white;
+    animation: typewriter-blink 1s step-end infinite;
   }
 }

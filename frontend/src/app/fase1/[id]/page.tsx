@@ -6,6 +6,7 @@ import api from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 import { Mic, MicOff, Send, Activity, User, Bot, BookOpen, ArrowLeft, Image as ImageIcon, Key } from "lucide-react";
 import ReactMarkdown from "react-markdown";
+import TheoreticalBoard from "@/components/TheoreticalBoard";
 
 interface ChatTurn {
   role: string;
@@ -64,6 +65,12 @@ export default function Fase1Tutor() {
     };
     init();
   }, [id, router]);
+
+  useEffect(() => {
+    return () => {
+      if (typeof window !== "undefined") window.speechSynthesis.cancel();
+    };
+  }, []);
 
   const sendMessageHandlerRef = useRef<((txt: string) => void) | null>(null);
 
@@ -411,51 +418,9 @@ export default function Fase1Tutor() {
 
       {/* RIGHT PANEL - DOCUMENT VIEWER */}
       <div className="hidden md:flex flex-col w-1/2 bg-white relative">
-         <div className="p-6 border-b border-slate-100 flex items-center gap-4 bg-slate-50 shrink-0">
-             <div className="w-12 h-12 bg-indigo-100 rounded-xl flex items-center justify-center border border-indigo-200">
-                <BookOpen className="w-6 h-6 text-indigo-700" />
-             </div>
-             <div>
-                <h1 className="text-xl font-bold text-slate-800">Lousa Teórica</h1>
-                <p className="text-sm font-medium text-slate-500">Documentação Clínica do Tema Atual</p>
-             </div>
-         </div>
-
-         <div className="flex-1 overflow-y-auto p-8 lg:p-12 scroll-smooth">
-             {!documentContent ? (
-                 <div className="h-full flex flex-col items-center justify-center text-slate-400 space-y-4">
-                     <BookOpen className="w-16 h-16 opacity-30" />
-                     <p className="font-medium text-lg">A lousa está vazia.</p>
-                     <p className="text-sm max-w-sm text-center">Pergunte algo ao Preceptor no chat ao lado para que ele preencha este quadro com o mapa mental da doença!</p>
-                 </div>
-             ) : (
-                 <div className="prose prose-indigo max-w-none text-slate-700 leading-relaxed space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-500">
-                    <ReactMarkdown
-                      components={{
-                        h1: ({node, ...props}) => <h1 className="text-3xl font-extrabold text-slate-900 mb-6 border-b border-slate-100 pb-4" {...props} />,
-                        h2: ({node, ...props}) => <h2 className="text-xl font-bold text-indigo-700  mb-4 bg-indigo-50 px-4 py-2 rounded-lg inline-block border border-indigo-100" {...props} />,
-                        p: ({node, ...props}) => <p className="mb-4 text-slate-700 text-lg" {...props} />,
-                        ul: ({node, ...props}) => <ul className="list-disc pl-6 mb-6 space-y-2 marker:text-indigo-500" {...props} />,
-                        ol: ({node, ...props}) => <ol className="list-decimal pl-6 mb-6 space-y-2 marker:text-indigo-500 font-medium" {...props} />,
-                        strong: ({node, ...props}) => <strong className="font-bold text-slate-900" {...props} />,
-                      }}
-                    >
-                      {documentContent}
-                    </ReactMarkdown>
-
-                    <div className="mt-16 pt-8 border-t border-slate-100 flex flex-col items-center text-center">
-                       <p className="text-slate-500 font-medium mb-4 text-sm">Visualizar imagens de referência do tema em discussão?</p>
-                       <button 
-                         onClick={handleGoogleImages}
-                         className="flex items-center gap-2 bg-slate-800 text-white px-6 py-2.5 rounded-full font-bold hover:bg-slate-700 transition-colors shadow-md"
-                       >
-                         <ImageIcon className="w-4 h-4" />
-                         Buscar Imagens Clínicas no Google
-                       </button>
-                    </div>
-                 </div>
-             )}
-         </div>
+         <TheoreticalBoard 
+            content={documentContent} 
+         />
       </div>
       
       {showApiKeyWarning && (
