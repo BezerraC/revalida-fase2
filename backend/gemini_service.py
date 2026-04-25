@@ -4,10 +4,13 @@ import google.generativeai as genai
 from models import ChatTurn, CaseModel
 from typing import List, Optional
 
-def configure_genai(api_key: str):
-    genai.configure(api_key=api_key)
+def configure_genai(api_key: Optional[str] = None):
+    key = api_key or os.getenv("GOOGLE_API_KEY")
+    if not key:
+        print("AVISO: GOOGLE_API_KEY não encontrada no .env")
+    genai.configure(api_key=key)
 
-async def get_patient_response(system_prompt: str, history: List[ChatTurn], user_message: str, api_key: str) -> str:
+async def get_patient_response(system_prompt: str, history: List[ChatTurn], user_message: str, api_key: Optional[str] = None) -> str:
     configure_genai(api_key)
     
     generation_config = {
@@ -15,93 +18,89 @@ async def get_patient_response(system_prompt: str, history: List[ChatTurn], user
         "top_p": 0.95,
         "top_k": 64,
         "max_output_tokens": 2048,
+        "response_mime_type": "text/plain",
     }
     
     model = genai.GenerativeModel(
-        model_name="gemini-2.5-flash-lite", # Corrigido para a versão estável atual ou preferida
+        model_name="gemini-2.5-flash-lite",
         generation_config=generation_config,
         system_instruction=system_prompt,
     )
     
-    gemini_history = []
+    chat_history = []
     for turn in history:
-        gemini_history.append({"role": turn.role, "parts": [{"text": turn.text}]})
-        
-    try:
-        chat = model.start_chat(history=gemini_history)
-        response = await chat.send_message_async({"role": "user", "parts": [{"text": user_message}]})
-        return response.text
-    except Exception as e:
-        print(f"Erro no gemini: {e}")
-        if "429" in str(e) or "quota" in str(e).lower():
-            return "*(Paciente ofegante - O limite da SUA chave de API do Google foi atingido. Por favor, espere um momento)*"
-        return f"*(Erro na API: {str(e)})*"
+        chat_history.append({"role": turn.role, "parts": [turn.text]})
+    
+    chat = model.start_chat(history=chat_history)
+    response = chat.send_message(user_message)
+    return response.text
 
-async def generate_feedback(case: CaseModel, history: List[ChatTurn], api_key: str) -> str:
+async def generate_feedback(case: CaseModel, history: List[ChatTurn], api_key: Optional[str] = None) -> str:
     configure_genai(api_key)
     model = genai.GenerativeModel(model_name="gemini-2.5-flash-lite")
     
     conversation_text = ""
     for turn in history:
-        role_str = "Aluno (Médico)" if turn.role == "user" else "Paciente (IA)"
-        conversation_text += f"{role_str}: {turn.text}\n"
-        
-    checklist_text = "\n".join([f"- {item}" for item in case.checklist])
+        role = "Médico" if turn.role == "user" else "Paciente"
+        conversation_text += f"{role}: {turn.text}\n"
     
     prompt = f"""
-    Você é um avaliador do teste do Revalida INEP (prova prática de habilidades clínicas).
-    Abaixo está a transcrição da simulação de uma anamnese sobre o caso '{case.title}'.
+    Você é um avaliador do Revalida INEP.
+    Analise a consulta médica abaixo entre um Médico (estudante) e um Paciente.
     
-    Checklist de Avaliação Esperada:
-    {checklist_text}
+    CENÁRIO CLÍNICO:
+    Título: {case.title}
+    Descrição: {case.description}
+    Checklist de Avaliação (Critérios):
+    {case.checklist}
     
-    Transcrição da Consulta:
+    CONVERSA:
     {conversation_text}
     
-    Avalie o desempenho do aluno detalhadamente. 
-    1. Pontue quais itens do checklist ele cumpriu e quais ele falhou.
-    2. Liste feedback de habilidades de comunicação (empatia, clareza, etc).
-    3. Dê uma nota geral de 0 a 10.
-    Retorne a resposta formatada em Markdown, sendo construtivo.
+    Sua tarefa:
+    1. Forneça um feedback detalhado sobre a performance do médico.
+    2. Liste o que ele acertou e o que ele esqueceu com base no checklist.
+    3. No final, atribua uma nota de 0 a 10 no formato exato: "Nota: X/10".
+    
+    Responda em Markdown.
     """
     
-    try:
-        response = await model.generate_content_async(prompt)
-        return response.text
-    except Exception as e:
-        print(f"Erro no gemini ao gerar feedback: {e}")
-        raise e
+    response = model.generate_content(prompt)
+    return response.text
 
-async def generate_fase1_chat(user_message: str, history: List[ChatTurn], api_key: str) -> dict:
+async def generate_fase1_chat(user_message: str, history: List[ChatTurn], api_key: Optional[str] = None) -> dict:
     configure_genai(api_key)
     model = genai.GenerativeModel(
         model_name="gemini-2.5-flash-lite",
         generation_config={"response_mime_type": "application/json"}
     )
     
-    prompt = """Você é um Médico Preceptor (Tutor) especialista no Revalida INEP (Brasil).
-Sua função é conversar com o aluno e ajudá-lo a estudar (Fase 1 teórica). O aluno pode perguntar sobre doenças, sintomas ou fazer simulações teóricas.
-
-Responda OBRIGATORIAMENTE em formato JSON válido, contendo exatamente duas chaves:
-1. "reply": A sua resposta de conversação (natural, clara e direta para ser falada em áudio). Se estiver cumprimentando, dê as boas vindas.
-2. "document": Um artigo estruturado em Markdown sobre a principal doença da conversa. Siga sempre o formato prático INEP:
-   # [Nome da Doença]
-   ## 1. Definição e Epidemiologia
-   ## 2. Quadro Clínico (cite 'pegadinhas' clássicas)
-   ## 3. Diagnóstico (compare UBS/UPA vs Padrão Ouro)
-   ## 4. Tratamento e Conduta
-   Se não for uma doença específica ou não se aplicar, deixe o campo "document" vazio (""). SEMPRE preencha esse campo com o texto markdown se houver uma doença ou tema sendo discutido, em vez de deixar pro usuário pedir de novo.
-
-Aqui está o histórico recente da conversa:
-"""
-    for turn in history[-4:]:
-        prompt += f"\n[{turn.get('role', 'user')}] {turn.get('text', '')}"
+    history_context = ""
+    for turn in history:
+        role = "Usuário" if turn.role == "user" else "Tutor"
+        history_context += f"{role}: {turn.text}\n"
         
-    prompt += f"\n\n[user] {user_message}"
-
+    prompt = f"""
+    Você é o 'Preceptor IA', um tutor especialista em preparar médicos para o Revalida INEP.
+    Sua função é tirar dúvidas de forma técnica, mas didática, focando no que o INEP costuma cobrar.
+    
+    CONTEXTO DA CONVERSA:
+    {history_context}
+    
+    PERGUNTA ATUAL:
+    {user_message}
+    
+    REQUISITOS DA RESPOSTA (JSON):
+    Retorne um objeto JSON com dois campos:
+    1. "reply": Sua resposta direta ao aluno (curta, direta e incentivadora).
+    2. "document": Um artigo completo em Markdown para a 'Lousa Teórica' sobre o tema da pergunta. 
+       - Use títulos, negritos e tabelas se necessário.
+       - Inclua 'Pegadinhas do Revalida' se houver.
+    """
+    
     try:
-        response = await model.generate_content_async(prompt)
-        text = response.text.strip()
+        response = model.generate_content(prompt)
+        text = response.text
         
         # Limpeza caso o modelo retorne blocos de código markdown mesmo com JSON mode
         if "```" in text:
@@ -113,23 +112,22 @@ Aqui está o histórico recente da conversa:
         # Tratamento para chaves duplicadas no final (comum em alguns modelos flash)
         text = text.strip()
         if text.count('{') == 1 and text.count('}') > 1:
-            # Se houver apenas um objeto abrindo mas vários fechando, pega até o primeiro fechamento válido
-            # ou simplesmente remove o último } se ele for duplicado
             while text.endswith("}}"):
                 text = text[:-1].strip()
 
         try:
             parsed = json.loads(text)
             return parsed
-        except json.JSONDecodeError as je:
-            print(f"Erro de decodificação JSON. Texto recebido: {text}")
-            # Fallback em caso de JSON malformado mas que contenha o conteúdo
+        except json.JSONDecodeError:
+            # Fallback se o JSON falhar
             return {
                 "reply": "Ocorreu um erro ao formatar a resposta técnica, mas estou aqui para ajudar. Pode repetir a dúvida?",
-                "document": ""
+                "document": text
             }
+            
     except Exception as e:
         print(f"Erro no gemini ao gerar fase 1: {e}")
-        if "429" in str(e) or "quota" in str(e).lower():
-            raise Exception("Limite de requisições da SUA chave atingido. Aguarde um momento.")
-        raise Exception(f"Erro na API do Gemini: {str(e)}")
+        return {
+            "reply": "Desculpe, tive um problema ao processar sua dúvida. Pode tentar novamente?",
+            "document": ""
+        }

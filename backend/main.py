@@ -115,7 +115,6 @@ async def register(user_data: UserRegistration):
         "email": user_data.email,
         "hashed_password": hashed_password,
         "role": "student",
-        "gemini_api_key": None,
         "created_at": datetime.now(timezone.utc)
     }
     
@@ -138,20 +137,11 @@ async def get_me(current_user: dict = Depends(get_current_user)):
         "full_name": current_user["full_name"],
         "email": current_user["email"],
         "role": current_user.get("role", "student"),
-        "gemini_api_key": current_user.get("gemini_api_key"),
         "profile_image": current_user.get("profile_image"),
         "total_score": current_user.get("total_score", 0),
         "level": current_user.get("level", 1),
         "created_at": current_user.get("created_at")
     }
-
-@app.patch("/auth/profile/api-key", tags=["Auth"])
-async def update_api_key(api_key: str = Body(..., embed=True), current_user: dict = Depends(get_current_user)):
-    await database.db.users.update_one(
-        {"_id": ObjectId(current_user["_id"])},
-        {"$set": {"gemini_api_key": api_key}}
-    )
-    return {"message": "Chave de API atualizada com sucesso"}
 
 class UpdateProfileRequest(BaseModel):
     full_name: str
@@ -272,9 +262,6 @@ async def get_all_sessions(admin: dict = Depends(get_current_admin)):
 @app.post("/chat", tags=["Casos Clínicos"])
 async def chat_interaction(request: ChatRequest, current_user: dict = Depends(get_current_user)):
     user_id = str(current_user["_id"])
-    api_key = current_user.get("gemini_api_key")
-    if not api_key:
-        raise HTTPException(status_code=403, detail="Você precisa configurar sua chave de API do Gemini no Perfil para usar o chat.")
 
     session = await database.db.sessions.find_one({"_id": ObjectId(request.session_id), "user_id": user_id})
     if not session:
@@ -289,8 +276,7 @@ async def chat_interaction(request: ChatRequest, current_user: dict = Depends(ge
     response_text = await gemini_service.get_patient_response(
         system_prompt=case["patient_system_prompt"],
         history=history_turns,
-        user_message=request.message.text,
-        api_key=api_key
+        user_message=request.message.text
     )
     
     # Atualizar doc no Mongo
@@ -307,9 +293,6 @@ async def chat_interaction(request: ChatRequest, current_user: dict = Depends(ge
 @app.post("/feedback/{session_id}", tags=["Casos Clínicos"])
 async def get_feedback(session_id: str, current_user: dict = Depends(get_current_user)):
     user_id = str(current_user["_id"])
-    api_key = current_user.get("gemini_api_key")
-    if not api_key:
-        raise HTTPException(status_code=403, detail="Você precisa configurar sua chave de API do Gemini no Perfil para receber feedback.")
 
     session = await database.db.sessions.find_one({"_id": ObjectId(session_id), "user_id": user_id})
     if not session:
@@ -331,10 +314,10 @@ async def get_feedback(session_id: str, current_user: dict = Depends(get_current
         return {"feedback": "Nenhuma interação ocorreu para ser avaliada."}
         
     try:
-        feedback_text = await gemini_service.generate_feedback(case_model, history_turns, api_key=api_key)
+        feedback_text = await gemini_service.generate_feedback(case_model, history_turns)
     except Exception as e:
         if "429" in str(e) or "quota" in str(e).lower():
-            raise HTTPException(status_code=429, detail="A SUA chave de API do Google atingiu o limite gratuito. Por favor, aguarde cerca de 1 minuto.")
+            raise HTTPException(status_code=429, detail="O limite da chave de API do servidor atingiu o limite gratuito. Por favor, aguarde cerca de 1 minuto.")
         raise HTTPException(status_code=500, detail="Ocorreu um erro interno na geração do feedback. Tente novamente.")
     
     await database.db.sessions.update_one(
@@ -376,34 +359,37 @@ async def delete_fase1_session(session_id: str, current_user: dict = Depends(get
 @app.post("/fase1/chat", tags=["Simulados"])
 async def fase1_chat(request: Fase1ChatRequest, current_user: dict = Depends(get_current_user)):
     user_id = str(current_user["_id"])
-    api_key = current_user.get("gemini_api_key")
-    if not api_key:
-        raise HTTPException(status_code=403, detail="Você precisa configurar sua chave de API do Gemini no Perfil para usar o tutor.")
 
     session = await database.db.fase1_sessions.find_one({"_id": ObjectId(request.session_id), "user_id": user_id})
     if not session:
         raise HTTPException(status_code=404, detail="Sessão não encontrada")
         
     user_text = request.message.text
-    history_turns = session.get("history", [])
+    # Recriar lista pydantic do histórico
+    history_dicts = session.get("history", [])
+    history_turns = [ChatTurn(**t) for t in history_dicts]
     
-    # Store user turn
-    history_turns.append({"role": "user", "text": user_text})
+    # Adicionar o turno atual do usuário à lista (para o Gemini ver o contexto completo)
+    current_user_turn = ChatTurn(role="user", text=user_text)
+    history_turns.append(current_user_turn)
     
     try:
-        reply_data = await gemini_service.generate_fase1_chat(user_text, history_turns, api_key=api_key)
+        reply_data = await gemini_service.generate_fase1_chat(user_text, history_turns)
     except Exception as e:
         if "429" in str(e) or "quota" in str(e).lower() or "limite" in str(e).lower():
-            raise HTTPException(status_code=429, detail="O limite da sua chave de API foi atingido. Aguarde 1 minuto.")
+            raise HTTPException(status_code=429, detail="O limite da chave de API do servidor foi atingido. Aguarde 1 minuto.")
         raise HTTPException(status_code=500, detail=str(e))
         
     ai_reply = reply_data.get("reply", "")
     new_doc = reply_data.get("document", "")
     
-    # Store bot turn
-    history_turns.append({"role": "model", "text": ai_reply})
+    # Adicionar resposta da IA ao histórico
+    history_turns.append(ChatTurn(role="model", text=ai_reply))
     
-    update_fields = {"history": history_turns}
+    # Converter tudo de volta para dicionários para salvar no MongoDB
+    history_to_save = [t.dict() for t in history_turns]
+    
+    update_fields = {"history": history_to_save}
     if new_doc and new_doc.strip() != "":
         update_fields["document"] = new_doc
         
