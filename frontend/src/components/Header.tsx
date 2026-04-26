@@ -51,7 +51,7 @@ const Header = () => {
             </Link>
 
             {/* Desktop Navigation */}
-            <nav className="hidden md:flex items-center gap-1">
+            {/* <nav className="hidden md:flex items-center gap-1">
               {navLinks.map((link) => (
                 <Link
                   key={link.href}
@@ -65,7 +65,7 @@ const Header = () => {
                   {link.name}
                 </Link>
               ))}
-            </nav>
+            </nav> */}
           </div>
 
           {/* Right: User Actions */}

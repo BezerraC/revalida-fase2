@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 
 const authRoutes = ['/login', '/register'];
+const publicRoutes = ['/', '/acesso-restrito'];
 
 export function middleware(request: NextRequest) {
   const token = request.cookies.get('auth_token')?.value;
@@ -13,8 +14,12 @@ export function middleware(request: NextRequest) {
     return NextResponse.redirect(new URL('/', request.url));
   }
 
+  // Se a rota for pública, permite acesso liberado (como a Landing Page na raiz)
+  if (publicRoutes.includes(pathname)) {
+    return NextResponse.next();
+  }
+
   // Se NÃO for uma rota de autenticação e NÃO houver token, redireciona para login.
-  // O matcher já cuida de ignorar arquivos estáticos e chamadas de API internas.
   if (!authRoutes.some(route => pathname.startsWith(route)) && !token) {
     return NextResponse.redirect(new URL('/login', request.url));
   }

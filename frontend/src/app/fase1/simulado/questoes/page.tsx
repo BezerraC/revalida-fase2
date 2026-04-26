@@ -27,6 +27,7 @@ import {
 } from "lucide-react";
 import api, { BASE_URL } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
+import toast from "react-hot-toast";
 
 interface Question {
   _id: string;
@@ -356,10 +357,10 @@ function ActiveSimuladoContent() {
       setShowReportModal(false);
       setReportReason("");
       setReportDescription("");
-      alert("Reporte enviado com sucesso! Nossa equipe irá revisar esta questão.");
+      toast.success("Reporte enviado com sucesso! Nossa equipe irá revisar esta questão.");
     } catch (err) {
       console.error("Erro ao enviar reporte:", err);
-      alert("Erro ao enviar reporte. Tente novamente mais tarde.");
+      toast.error("Erro ao enviar reporte. Tente novamente mais tarde.");
     } finally {
       setIsReporting(false);
     }

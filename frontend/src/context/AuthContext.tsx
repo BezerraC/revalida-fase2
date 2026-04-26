@@ -10,10 +10,13 @@ interface User {
   email: string;
   full_name: string;
   role: string;
+  cpf?: string;
+  phone?: string;
   gemini_api_key?: string;
   profile_image?: string;
   total_score?: number;
   level?: number;
+  subscription_status: string; // pending, active, overdue
   created_at?: string;
 }
 

@@ -16,6 +16,7 @@ import {
   X
 } from "lucide-react";
 import Link from "next/link";
+import toast from "react-hot-toast";
 
 interface Report {
   _id: string;
@@ -59,7 +60,7 @@ export default function AdminReportsPage() {
       setReports(prev => prev.map(r => r._id === id ? { ...r, status: newStatus } : r));
     } catch (err) {
       console.error("Erro ao atualizar status:", err);
-      alert("Erro ao atualizar status do reporte.");
+      toast.error("Erro ao atualizar status do reporte.");
     }
   };
 
@@ -71,7 +72,7 @@ export default function AdminReportsPage() {
       setSelectedQuestion(res.data);
     } catch (err) {
       console.error("Erro ao carregar questão:", err);
-      alert("Erro ao carregar detalhes da questão.");
+      toast.error("Erro ao carregar detalhes da questão.");
       setIsQuestionModalOpen(false);
     } finally {
       setLoadingQuestion(false);

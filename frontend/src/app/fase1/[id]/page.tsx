@@ -7,6 +7,7 @@ import { useAuth } from "@/context/AuthContext";
 import { Mic, MicOff, Send, Activity, User, Bot, BookOpen, ArrowLeft, Image as ImageIcon, Key } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import TheoreticalBoard from "@/components/TheoreticalBoard";
+import toast from "react-hot-toast";
 
 interface ChatTurn {
   role: string;
@@ -59,7 +60,7 @@ export default function Fase1Tutor() {
             setDocumentContent(res.data.document || "");
         } catch (err) {
             console.error("Error loading session:", err);
-            alert("Sessão não encontrada.");
+            toast.error("Sessão não encontrada.");
             router.push("/");
         }
     };

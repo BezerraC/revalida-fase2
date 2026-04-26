@@ -20,6 +20,7 @@ import {
   ChevronDown,
   ChevronRight
 } from "lucide-react";
+import toast from "react-hot-toast";
 
 // Componente de Modal de Seleção (Agora com Multi-seleção)
 interface SelectionModalProps {
@@ -218,7 +219,7 @@ function SimuladoConfigContent() {
       router.push(url);
     } catch (err) {
       console.error("Erro ao iniciar sessão de simulado:", err);
-      alert("Erro ao iniciar o simulado. Tente novamente.");
+      toast.error("Erro ao iniciar o simulado. Tente novamente.");
     } finally {
       setLoading(false);
     }

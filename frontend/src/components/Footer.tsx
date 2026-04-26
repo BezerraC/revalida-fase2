@@ -49,10 +49,7 @@ const Footer = () => {
                 <Link href="/historico" className="text-sm hover:text-indigo-400 transition-colors">Histórico de Provas</Link>
               </li>
               <li>
-                <Link href="/feedback" className="text-sm hover:text-indigo-400 transition-colors">Dar Feedback</Link>
-              </li>
-              <li>
-                <Link href="/contato" className="text-sm hover:text-indigo-400 transition-colors">Suporte</Link>
+                <Link href="https://wa.me/5596984176164" className="text-sm hover:text-indigo-400 transition-colors">Suporte</Link>
               </li>
             </ul>
           </div>

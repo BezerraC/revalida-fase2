@@ -28,10 +28,16 @@ import {
   Sparkles,
   Trash2,
   Camera,
-  Trophy
+  Trophy,
+  CreditCard,
+  Receipt,
+  FileText,
+  Download,
+  DollarSign
 } from "lucide-react";
 import Link from "next/link";
 import api, { BASE_URL } from "@/lib/api";
+import toast from "react-hot-toast";
 import ConfirmModal from "@/components/ConfirmModal";
 
 interface SimuladoSession {
@@ -53,12 +59,19 @@ export default function ProfilePage() {
   const [activeSessions, setActiveSessions] = useState<SimuladoSession[]>([]);
   const [isLoadingSessions, setIsLoadingSessions] = useState(true);
 
+  const [financeData, setFinanceData] = useState<{subscription: any, payments: any[]}>({ subscription: null, payments: [] });
+  const [isLoadingFinance, setIsLoadingFinance] = useState(true);
+
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [editName, setEditName] = useState("");
   const [editEmail, setEditEmail] = useState("");
+  const [editCpf, setEditCpf] = useState("");
+  const [editPhone, setEditPhone] = useState("");
   const [isUpdatingProfile, setIsUpdatingProfile] = useState(false);
   const [updateError, setUpdateError] = useState("");
   const [isUploadingImage, setIsUploadingImage] = useState(false);
+  const [isPaymentsModalOpen, setIsPaymentsModalOpen] = useState(false);
+  const [isCanceling, setIsCanceling] = useState(false);
 
   const [modalConfig, setModalConfig] = useState<{
     isOpen: boolean;
@@ -78,9 +91,49 @@ export default function ProfilePage() {
     if (user) {
       setEditName(user.full_name || "");
       setEditEmail(user.email || "");
+      setEditCpf(user.cpf || "");
+      setEditPhone(user.phone || "");
       loadActiveSessions();
+      loadFinance();
     }
   }, [user]);
+
+  async function loadFinance() {
+    try {
+      const res = await api.get("/payments/history");
+      setFinanceData(res.data);
+    } catch (err) {
+      console.error("Erro ao carregar dados financeiros:", err);
+    } finally {
+      setIsLoadingFinance(false);
+    }
+  }
+
+  async function handleCancelSubscription() {
+    if (!financeData.subscription?.id) return;
+    
+    setModalConfig({
+      isOpen: true,
+      title: "Cancelar Assinatura",
+      message: "Tem certeza que deseja cancelar sua assinatura? Você continuará tendo acesso até o fim do ciclo que já foi pago, mas novas cobranças não serão geradas.",
+      type: "danger",
+      onConfirm: async () => {
+        setIsCanceling(true);
+        setModalConfig({ ...modalConfig, isOpen: false });
+        try {
+          await api.delete(`/payments/subscription/${financeData.subscription.id}`);
+          toast.success("Assinatura cancelada com sucesso.");
+          loadFinance();
+          refreshUser();
+        } catch (error) {
+          console.error("Erro ao cancelar assinatura:", error);
+          toast.error("Erro ao cancelar assinatura. Tente novamente mais tarde.");
+        } finally {
+          setIsCanceling(false);
+        }
+      }
+    });
+  }
 
   async function loadActiveSessions() {
     try {
@@ -113,10 +166,13 @@ export default function ProfilePage() {
     try {
       await api.patch("/auth/profile", {
         full_name: editName,
-        email: editEmail
+        email: editEmail,
+        cpf: editCpf,
+        phone: editPhone
       });
       await refreshUser();
       setIsEditModalOpen(false);
+      toast.success("Perfil atualizado com sucesso!");
     } catch (error: any) {
       console.error("Erro ao atualizar perfil:", error);
       setUpdateError(error.response?.data?.detail || "Erro ao atualizar perfil.");
@@ -151,8 +207,10 @@ export default function ProfilePage() {
         try {
           await api.delete(`/simulado/sessions/${sessionId}`);
           setActiveSessions(activeSessions.filter(s => s._id !== sessionId));
+          toast.success("Sessão excluída com sucesso.");
         } catch (err) {
           console.error("Erro ao excluir sessão:", err);
+          toast.error("Erro ao excluir sessão.");
         }
       }
     });
@@ -162,18 +220,19 @@ export default function ProfilePage() {
     const file = e.target.files?.[0];
     if (!file) return;
 
+    setIsUploadingImage(true);
     const formData = new FormData();
     formData.append("file", file);
 
-    setIsUploadingImage(true);
     try {
       await api.post("/auth/profile/image", formData, {
         headers: { "Content-Type": "multipart/form-data" },
       });
       await refreshUser();
+      toast.success("Foto de perfil atualizada!");
     } catch (err) {
       console.error("Erro ao fazer upload da imagem:", err);
-      alert("Erro ao enviar imagem. Verifique o formato.");
+      toast.error("Erro ao enviar imagem. Verifique o formato.");
     } finally {
       setIsUploadingImage(false);
     }
@@ -308,6 +367,109 @@ export default function ProfilePage() {
         {/* Right Column: AI Config & Activity */}
         <div className="lg:col-span-2 space-y-8">
           
+          {/* Financeiro */}
+          <section className="bg-white rounded-[2.5rem] p-8 border border-gray-100 shadow-xl overflow-hidden">
+            <h2 className="text-xl font-black text-gray-900 mb-8 flex items-center gap-3">
+              <CreditCard className="text-indigo-600" />
+              Assinatura e Financeiro
+            </h2>
+            
+            {isLoadingFinance ? (
+               <div className="flex items-center justify-center py-8"><Activity className="w-8 h-8 animate-spin text-indigo-400" /></div>
+            ) : financeData.subscription ? (
+               <div className="space-y-8">
+                 {/* Current Plan Info */}
+                 <div className="p-6 bg-gradient-to-br from-indigo-50 to-violet-50 rounded-3xl border border-indigo-100">
+                    <div className="flex justify-between items-center mb-4">
+                       <div>
+                         <h4 className="text-[10px] font-black text-indigo-600 uppercase tracking-widest">Plano Atual</h4>
+                         <p className="text-lg font-black text-gray-900">{financeData.subscription.description}</p>
+                       </div>
+                       <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest ${financeData.subscription.status === "ACTIVE" ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"}`}>
+                         {financeData.subscription.status === "ACTIVE" ? "Ativo" : financeData.subscription.status}
+                       </span>
+                    </div>
+                    
+                    {financeData.payments.length > 0 && financeData.payments[0].creditCard && (
+                       <div className="flex items-center gap-3 mt-6 p-4 bg-white/60 rounded-2xl border border-white">
+                         <div className="w-10 h-10 bg-indigo-100 text-indigo-600 rounded-xl flex items-center justify-center shadow-sm">
+                            <CreditCard size={20} />
+                         </div>
+                         <div>
+                            <p className="text-xs font-bold text-gray-500">Cartão de Crédito Salvo</p>
+                            <p className="text-sm font-black text-gray-900">
+                               {financeData.payments[0].creditCard.creditCardBrand} final {financeData.payments[0].creditCard.creditCardNumber}
+                            </p>
+                         </div>
+                       </div>
+                    )}
+                    
+                    <div className="mt-6 flex gap-3">
+                       <button 
+                         onClick={handleCancelSubscription}
+                         disabled={isCanceling}
+                         className="flex-1 text-red-600 font-bold text-xs uppercase tracking-widest disabled:opacity-50 flex items-center justify-center gap-2"
+                       >
+                         {isCanceling ? <Activity className="w-4 h-4 animate-spin" /> : null}
+                         Cancelar Assinatura
+                       </button>
+                    </div>
+                 </div>
+
+                 {/* Payment History */}
+                 <div>
+                    <h4 className="font-black text-gray-900 mb-4 flex items-center gap-2">
+                       <Receipt size={18} className="text-gray-400" />
+                       Últimos Pagamentos
+                    </h4>
+                    <div className="space-y-3">
+                       {financeData.payments.slice(0, 3).map((pay: any) => (
+                          <div key={pay.id} className="flex items-center justify-between p-4 bg-gray-50 rounded-2xl border border-gray-100 hover:bg-white hover:border-indigo-100 transition-colors group">
+                             <div>
+                               <p className="text-sm font-bold text-gray-900">R$ {pay.value.toFixed(2).replace('.', ',')}</p>
+                               <p className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">{new Date(pay.dateCreated).toLocaleDateString('pt-BR')}</p>
+                             </div>
+                             <div className="flex items-center gap-3">
+                               <span className={`text-[10px] font-black uppercase tracking-widest px-2 py-1 rounded-md ${pay.status === 'CONFIRMED' || pay.status === 'RECEIVED' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
+                                 {pay.status === 'CONFIRMED' || pay.status === 'RECEIVED' ? 'Pago' : pay.status === 'PENDING' ? 'Pendente' : pay.status}
+                               </span>
+                               {pay.transactionReceiptUrl ? (
+                                  <a href={pay.transactionReceiptUrl} target="_blank" rel="noreferrer" className="w-8 h-8 bg-white border border-gray-200 rounded-lg flex items-center justify-center text-gray-400 hover:text-indigo-600 hover:border-indigo-200 transition-colors" title="Ver Comprovante">
+                                     <Download size={14} />
+                                  </a>
+                               ) : pay.invoiceUrl && pay.status === 'PENDING' ? (
+                                  <a href={pay.invoiceUrl} target="_blank" rel="noreferrer" className="w-8 h-8 bg-indigo-50 border border-indigo-100 rounded-lg flex items-center justify-center text-indigo-600 hover:bg-indigo-100 transition-colors" title="Pagar Fatura">
+                                     <DollarSign size={14} />
+                                  </a>
+                               ) : null}
+                             </div>
+                          </div>
+                       ))}
+                    </div>
+                    {financeData.payments.length > 3 && (
+                       <button 
+                         onClick={() => setIsPaymentsModalOpen(true)}
+                         className="w-full mt-4 py-3 bg-gray-50 text-indigo-600 font-bold text-xs uppercase tracking-widest rounded-xl hover:bg-indigo-50 transition-colors"
+                       >
+                         Ver Todos ({financeData.payments.length})
+                       </button>
+                    )}
+                 </div>
+               </div>
+            ) : (
+               <div className="text-center py-8">
+                  <div className="w-16 h-16 bg-gray-50 text-gray-400 rounded-2xl flex items-center justify-center mx-auto mb-4 border border-gray-100">
+                     <FileText size={24} />
+                  </div>
+                  <h3 className="font-bold text-gray-900 mb-2">Nenhuma assinatura ativa</h3>
+                  <p className="text-sm text-gray-500 mb-6">Você ainda não escolheu um plano premium.</p>
+                  <Link href="/planos" className="px-6 py-3 bg-indigo-600 text-white font-bold rounded-xl hover:bg-indigo-700 transition-colors text-sm shadow-md">
+                     Ver Planos
+                  </Link>
+               </div>
+            )}
+          </section>
+
           {/* Active Sessions */}
           {activeSessions.length > 0 && (
             <section className="bg-white rounded-[2.5rem] p-8 border border-gray-100 shadow-xl overflow-hidden">
@@ -434,6 +596,29 @@ export default function ProfilePage() {
                 />
               </div>
 
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">CPF</label>
+                  <input 
+                    type="text"
+                    value={editCpf}
+                    onChange={(e) => setEditCpf(e.target.value.replace(/\D/g, '').slice(0, 11))}
+                    placeholder="Somente números"
+                    className="w-full bg-gray-50 border border-gray-100 text-gray-900 px-6 py-4 rounded-2xl focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:bg-white transition-all font-bold text-sm"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">WhatsApp</label>
+                  <input 
+                    type="text"
+                    value={editPhone}
+                    onChange={(e) => setEditPhone(e.target.value.replace(/\D/g, '').slice(0, 11))}
+                    placeholder="Somente números"
+                    className="w-full bg-gray-50 border border-gray-100 text-gray-900 px-6 py-4 rounded-2xl focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:bg-white transition-all font-bold text-sm"
+                  />
+                </div>
+              </div>
+
               {updateError && (
                 <p className="text-red-500 text-sm font-bold bg-red-50 p-4 rounded-2xl border border-red-100">{updateError}</p>
               )}
@@ -455,6 +640,51 @@ export default function ProfilePage() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Payments History Modal */}
+      {isPaymentsModalOpen && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-gray-900/60 backdrop-blur-md animate-in fade-in duration-300">
+          <div className="bg-white rounded-[2.5rem] shadow-2xl p-8 max-w-lg w-full border border-gray-100 animate-in zoom-in duration-300 max-h-[90vh] flex flex-col">
+            <div className="flex items-center justify-between mb-6 flex-shrink-0">
+              <h2 className="text-xl font-black text-gray-900 flex items-center gap-2">
+                 <Receipt className="text-indigo-600" />
+                 Histórico Completo
+              </h2>
+              <button 
+                onClick={() => setIsPaymentsModalOpen(false)}
+                className="p-2 hover:bg-gray-100 rounded-xl transition-all"
+              >
+                <X className="w-5 h-5 text-gray-400" />
+              </button>
+            </div>
+
+            <div className="space-y-3 overflow-y-auto pr-2 custom-scrollbar flex-1">
+               {financeData.payments.map((pay: any) => (
+                  <div key={pay.id} className="flex items-center justify-between p-4 bg-gray-50 rounded-2xl border border-gray-100 hover:bg-white hover:border-indigo-100 transition-colors group">
+                     <div>
+                       <p className="text-sm font-bold text-gray-900">R$ {pay.value.toFixed(2).replace('.', ',')}</p>
+                       <p className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">{new Date(pay.dateCreated).toLocaleDateString('pt-BR')}</p>
+                     </div>
+                     <div className="flex items-center gap-3">
+                       <span className={`text-[10px] font-black uppercase tracking-widest px-2 py-1 rounded-md ${pay.status === 'CONFIRMED' || pay.status === 'RECEIVED' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
+                         {pay.status === 'CONFIRMED' || pay.status === 'RECEIVED' ? 'Pago' : pay.status === 'PENDING' ? 'Pendente' : pay.status}
+                       </span>
+                       {pay.transactionReceiptUrl ? (
+                          <a href={pay.transactionReceiptUrl} target="_blank" rel="noreferrer" className="w-8 h-8 bg-white border border-gray-200 rounded-lg flex items-center justify-center text-gray-400 hover:text-indigo-600 hover:border-indigo-200 transition-colors" title="Ver Comprovante">
+                             <Download size={14} />
+                          </a>
+                       ) : pay.invoiceUrl && pay.status === 'PENDING' ? (
+                          <a href={pay.invoiceUrl} target="_blank" rel="noreferrer" className="w-8 h-8 bg-indigo-50 border border-indigo-100 rounded-lg flex items-center justify-center text-indigo-600 hover:bg-indigo-100 transition-colors" title="Pagar Fatura">
+                             <DollarSign size={14} />
+                          </a>
+                       ) : null}
+                     </div>
+                  </div>
+               ))}
+            </div>
           </div>
         </div>
       )}

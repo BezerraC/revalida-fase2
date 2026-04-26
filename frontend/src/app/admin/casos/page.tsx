@@ -19,6 +19,7 @@ import {
   AlertCircle
 } from "lucide-react";
 import api from "@/lib/api";
+import toast from "react-hot-toast";
 
 interface Case {
   _id: string;
@@ -84,8 +85,9 @@ function CasesContent() {
     try {
       await api.delete(`/admin/cases/${id}`);
       await fetchCases();
+      toast.success("Cenário excluído com sucesso!");
     } catch (error) {
-      alert("Erro ao excluir caso");
+      toast.error("Erro ao excluir caso");
     }
   };
 
@@ -104,9 +106,10 @@ function CasesContent() {
       }
       await fetchCases();
       setIsModalOpen(false);
+      toast.success("Cenário salvo com sucesso!");
     } catch (error) {
       console.error("Erro ao salvar:", error);
-      alert("Erro ao salvar cenário. Verifique os campos.");
+      toast.error("Erro ao salvar cenário. Verifique os campos.");
     } finally {
       setIsSaving(false);
     }

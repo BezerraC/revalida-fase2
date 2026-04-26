@@ -5,6 +5,8 @@ from datetime import datetime
 class UserRegistration(BaseModel):
     full_name: str
     email: EmailStr
+    cpf: str
+    phone: str
     password: str
     confirm_password: str
 
@@ -12,16 +14,29 @@ class UserLogin(BaseModel):
     email: EmailStr
     password: str
 
+class ForgotPasswordRequest(BaseModel):
+    email: EmailStr
+
+class ResetPasswordRequest(BaseModel):
+    email: EmailStr
+    code: str
+    new_password: str
+
 class UserModel(BaseModel):
     id: Optional[str] = Field(alias="_id", default=None)
     full_name: str
     email: EmailStr
+    cpf: str
+    phone: str
     hashed_password: str
     role: str = "student"
     gemini_api_key: Optional[str] = None
     profile_image: Optional[str] = None
     total_score: int = 0
     level: int = 1
+    subscription_status: str = "pending" # pending, active, overdue
+    asaas_customer_id: Optional[str] = None
+    subscription_expiry: Optional[datetime] = None
     created_at: datetime = Field(default_factory=datetime.utcnow)
 
 class CaseModel(BaseModel):

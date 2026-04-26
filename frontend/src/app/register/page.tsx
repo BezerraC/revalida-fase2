@@ -3,13 +3,15 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import api from "@/lib/api";
-import { Mail, Lock, User, ArrowRight, CheckCircle2, Activity, ChevronLeft, Sparkles } from "lucide-react";
+import { Mail, Lock, User, ArrowRight, CheckCircle2, Activity, ChevronLeft, Sparkles, Phone, CreditCard } from "lucide-react";
 import Link from "next/link";
 
 export default function RegisterPage() {
   const [formData, setFormData] = useState({
     full_name: "",
     email: "",
+    cpf: "",
+    phone: "",
     password: "",
     confirm_password: "",
   });
@@ -151,6 +153,47 @@ export default function RegisterPage() {
                     className="w-full bg-gray-50 border border-gray-100 text-gray-900 pl-12 pr-4 py-3.5 rounded-2xl focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:bg-white transition-all font-bold"
                     placeholder="seu@email.com"
                   />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">CPF</label>
+                  <div className="relative group">
+                    <CreditCard className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-300 group-focus-within:text-indigo-600 transition-colors" />
+                    <input
+                      type="text"
+                      name="cpf"
+                      required
+                      value={formData.cpf}
+                      onChange={(e) => {
+                         // Mascara basica de CPF apenas numeros (o asaas aceita formatado ou nao)
+                         const val = e.target.value.replace(/\D/g, '').slice(0, 11);
+                         setFormData({ ...formData, cpf: val });
+                      }}
+                      className="w-full bg-gray-50 border border-gray-100 text-gray-900 pl-10 pr-4 py-3.5 rounded-2xl focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:bg-white transition-all font-bold text-sm"
+                      placeholder="Somente números"
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">WhatsApp</label>
+                  <div className="relative group">
+                    <Phone className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-300 group-focus-within:text-indigo-600 transition-colors" />
+                    <input
+                      type="text"
+                      name="phone"
+                      required
+                      value={formData.phone}
+                      onChange={(e) => {
+                         const val = e.target.value.replace(/\D/g, '').slice(0, 11);
+                         setFormData({ ...formData, phone: val });
+                      }}
+                      className="w-full bg-gray-50 border border-gray-100 text-gray-900 pl-10 pr-4 py-3.5 rounded-2xl focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:bg-white transition-all font-bold text-sm"
+                      placeholder="Ex: 11999999999"
+                    />
+                  </div>
                 </div>
               </div>
 

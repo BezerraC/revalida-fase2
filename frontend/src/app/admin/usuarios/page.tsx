@@ -14,6 +14,8 @@ import {
   CheckCircle2,
   AlertCircle
 } from "lucide-react";
+import { useAuth } from "@/context/AuthContext";
+import toast from "react-hot-toast";
 import api from "@/lib/api";
 
 interface User {
@@ -22,6 +24,10 @@ interface User {
   email: string;
   role: string;
   created_at: string;
+  cpf?: string;
+  phone?: string;
+  subscription_status?: string;
+  subscription_expiry?: string;
 }
 
 export default function UsersAdminPage() {
@@ -54,8 +60,9 @@ export default function UsersAdminPage() {
     try {
       await api.patch(`/admin/users/${userId}/role`, { role: newRole });
       await fetchUsers();
+      toast.success("Usuário atualizado com sucesso");
     } catch (error) {
-        alert("Erro ao atualizar role");
+        toast.error("Erro ao atualizar role");
     } finally {
         setIsUpdating(null);
     }
@@ -151,22 +158,45 @@ export default function UsersAdminPage() {
                         </div>
                         <div>
                           <p className="font-black text-slate-800">{user.full_name}</p>
-                          <p className="text-xs font-medium text-slate-500 flex items-center gap-1">
+                          <p className="text-xs font-medium text-slate-500 flex items-center gap-1 mb-1">
                             <Mail className="w-3 h-3" />
                             {user.email}
+                          </p>
+                          <p className="text-[10px] font-bold text-slate-400 flex items-center gap-2 uppercase tracking-wider">
+                            <span title="CPF">C: {user.cpf || 'N/I'}</span> &bull; 
+                            <span title="WhatsApp">W: {user.phone || 'N/I'}</span>
                           </p>
                         </div>
                       </div>
                     </td>
-                    <td className="px-8 py-5">
-                      <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider border shadow-sm ${
-                        user.role === 'admin' 
-                          ? 'bg-amber-50 text-amber-600 border-amber-100 shadow-amber-100/50' 
-                          : 'bg-blue-50 text-blue-600 border-blue-100 shadow-blue-100/50'
-                      }`}>
-                        {user.role === "admin" ? <Shield className="w-3 h-3" /> : <UserIcon className="w-3 h-3" />}
-                        {user.role === "admin" ? "Administrador" : "Estudante"}
-                      </span>
+                    <td className="px-8 py-5 align-top">
+                      <div className="flex flex-col gap-2 items-start">
+                          <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider border shadow-sm ${
+                            user.role === 'admin' 
+                              ? 'bg-amber-50 text-amber-600 border-amber-100 shadow-amber-100/50' 
+                              : 'bg-blue-50 text-blue-600 border-blue-100 shadow-blue-100/50'
+                          }`}>
+                            {user.role === "admin" ? <Shield className="w-3 h-3" /> : <UserIcon className="w-3 h-3" />}
+                            {user.role === "admin" ? "Administrador" : "Estudante"}
+                          </span>
+                          
+                          {/* Status da Assinatura */}
+                          {user.role !== 'admin' && (
+                             <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider border shadow-sm ${
+                               user.subscription_status === 'active' 
+                                 ? 'bg-emerald-50 text-emerald-600 border-emerald-100 shadow-emerald-100/50' 
+                                 : 'bg-slate-100 text-slate-500 border-slate-200 shadow-none'
+                             }`}>
+                               {user.subscription_status === 'active' ? 'Plano Ativo' : 'Pendente / S. Plano'}
+                             </span>
+                          )}
+                          
+                          {user.subscription_expiry && user.subscription_status === 'active' && (
+                             <span className="text-[10px] font-bold text-slate-400 mt-1 uppercase tracking-wider">
+                                Vencimento: {formatDate(user.subscription_expiry)}
+                             </span>
+                          )}
+                      </div>
                     </td>
                     <td className="px-8 py-5">
                       <div className="flex items-center gap-2 text-slate-500 font-bold text-sm">

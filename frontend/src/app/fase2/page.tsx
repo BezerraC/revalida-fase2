@@ -6,6 +6,7 @@ import api from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 import { Stethoscope, Activity, ArrowRight, History } from "lucide-react";
 import Link from "next/link";
+import toast from "react-hot-toast";
 
 interface CaseModel {
   _id: string;
@@ -40,7 +41,7 @@ export default function Fase2() {
       router.push(`/simulacao/${res.data.session_id}`);
     } catch (error) {
       console.error("Failed to start session", error);
-      alert("Erro ao iniciar sessão do caso.");
+      toast.error("Erro ao iniciar sessão do caso.");
     }
   };
 

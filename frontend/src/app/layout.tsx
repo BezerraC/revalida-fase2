@@ -19,6 +19,7 @@ export const metadata: Metadata = {
 
 import { AuthProvider } from "@/context/AuthContext";
 import MainLayout from "@/components/MainLayout";
+import { Toaster } from "react-hot-toast";
 
 export default function RootLayout({
   children,
@@ -32,6 +33,7 @@ export default function RootLayout({
         className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
       >
         <body className="min-h-full flex flex-col bg-gray-50">
+          <Toaster position="top-right" toastOptions={{ className: 'font-bold font-sans' }} />
           <MainLayout>
             {children}
           </MainLayout>

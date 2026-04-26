@@ -2,11 +2,23 @@ from fastapi import FastAPI, HTTPException, Request, Depends, Body, File, Upload
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.security import OAuth2PasswordRequestForm
-import database
-from models import CaseModel, ChatSessionModel, ChatRequest, ChatTurn, Fase1Request, Fase1ChatRequest, UserRegistration, UserLogin
-from bson import ObjectId
-import gemini_service
+from dotenv import load_dotenv
 import os
+
+# Carregar variáveis de ambiente o mais cedo possível
+load_dotenv()
+
+import database
+import gemini_service
+import payments
+import requests
+from models import CaseModel, ChatSessionModel, ChatRequest, ChatTurn, Fase1Request, Fase1ChatRequest, UserRegistration, UserLogin, ForgotPasswordRequest, ResetPasswordRequest
+from bson import ObjectId
+import random
+import string
+import smtplib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
 from pydantic import BaseModel, Field
 from auth_utils import get_current_user, get_current_admin, oauth2_scheme
 from auth_handler import get_password_hash, verify_password, create_access_token
@@ -113,8 +125,13 @@ async def register(user_data: UserRegistration):
     user_dict = {
         "full_name": user_data.full_name,
         "email": user_data.email,
+        "cpf": user_data.cpf,
+        "phone": user_data.phone,
         "hashed_password": hashed_password,
         "role": "student",
+        "subscription_status": "pending",
+        "asaas_customer_id": None,
+        "subscription_expiry": None,
         "created_at": datetime.now(timezone.utc)
     }
     
@@ -130,6 +147,115 @@ async def login(credentials: UserLogin):
     access_token = create_access_token(data={"sub": user["email"]})
     return {"access_token": access_token, "token_type": "bearer"}
 
+def generate_reset_code():
+    return ''.join(random.choices(string.digits, k=6))
+
+def send_reset_email(target_email: str, code: str):
+    smtp_server = os.getenv("SMTP_SERVER", "smtp.gmail.com")
+    smtp_port = int(os.getenv("SMTP_PORT", "587"))
+    smtp_user = os.getenv("SMTP_USER")
+    smtp_pass = os.getenv("SMTP_PASSWORD")
+    
+    if not smtp_user or "seu-email" in smtp_user:
+        print(f"⚠️ SMTP não configurado. Código para {target_email}: {code}")
+        return False
+
+    msg = MIMEMultipart()
+    msg['From'] = f"MedMaster <{smtp_user}>"
+    msg['To'] = target_email
+    msg['Subject'] = f"{code} é seu código de recuperação MedMaster"
+    
+    html = f"""
+    <div style="font-family: sans-serif; max-width: 600px; margin: auto; padding: 40px; border-radius: 24px; background-color: #f8fafc; border: 1px solid #e2e8f0;">
+        <div style="text-align: center; margin-bottom: 32px;">
+            <div style="display: inline-block; width: 48px; height: 48px; background-color: #4f46e5; border-radius: 12px; line-height: 48px; color: white; font-size: 24px; font-weight: 900;">M</div>
+            <h1 style="color: #1e293b; margin: 12px 0 0 0; font-size: 24px; font-weight: 900; tracking-tight: -0.025em;">MedMaster</h1>
+        </div>
+        <div style="background-color: white; padding: 40px; border-radius: 20px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);">
+            <h2 style="color: #1e293b; margin-top: 0; font-size: 20px; font-weight: 800;">Recuperação de Senha</h2>
+            <p style="color: #64748b; font-size: 16px; line-height: 1.6;">Olá!</p>
+            <p style="color: #64748b; font-size: 16px; line-height: 1.6;">Recebemos uma solicitação para redefinir sua senha. Use o código abaixo para validar sua identidade:</p>
+            
+            <div style="background-color: #f1f5f9; padding: 24px; border-radius: 16px; text-align: center; margin: 32px 0;">
+                <span style="font-size: 36px; font-weight: 900; letter-spacing: 8px; color: #4f46e5; font-family: monospace;">{code}</span>
+            </div>
+            
+            <p style="color: #94a3b8; font-size: 14px; text-align: center;">Este código expira em 15 minutos por segurança.</p>
+        </div>
+        <div style="text-align: center; margin-top: 32px;">
+            <p style="color: #94a3b8; font-size: 12px;">Se você não solicitou esta alteração, pode ignorar este e-mail com segurança.</p>
+            <p style="color: #cbd5e1; font-size: 12px;">© 2026 MedMaster - Plataforma de Elite Revalida</p>
+        </div>
+    </div>
+    """
+    msg.attach(MIMEText(html, 'html'))
+    
+    try:
+        server = smtplib.SMTP(smtp_server, smtp_port)
+        server.starttls()
+        server.login(smtp_user, smtp_pass)
+        server.send_message(msg)
+        server.quit()
+        return True
+    except Exception as e:
+        print(f"❌ Erro ao enviar e-mail: {e}")
+        return False
+
+@app.post("/auth/forgot-password", tags=["Auth"])
+async def forgot_password(req: ForgotPasswordRequest):
+    user = await database.db.users.find_one({"email": req.email})
+    if not user:
+        return {"message": "Se o e-mail existir, um código foi enviado."}
+    
+    code = generate_reset_code()
+    expiry = datetime.now(timezone.utc) + timedelta(minutes=15)
+    
+    await database.db.users.update_one(
+        {"email": req.email},
+        {"$set": {
+            "reset_code": code,
+            "reset_code_expiry": expiry
+        }}
+    )
+    
+    # Enviar e-mail real
+    sent = send_reset_email(req.email, code)
+    
+    if not sent:
+        # Se falhar o envio real, ainda logamos no terminal para debug
+        print(f"🔢 CÓDIGO (BACKUP): {code}")
+    
+    return {"message": "Código de recuperação enviado para o e-mail."}
+
+@app.post("/auth/reset-password", tags=["Auth"])
+async def reset_password(req: ResetPasswordRequest):
+    user = await database.db.users.find_one({"email": req.email})
+    if not user:
+         raise HTTPException(status_code=404, detail="Usuário não encontrado")
+    
+    if user.get("reset_code") != req.code:
+         raise HTTPException(status_code=400, detail="Código inválido")
+    
+    expiry = user.get("reset_code_expiry")
+    if not expiry:
+         raise HTTPException(status_code=400, detail="Nenhum código solicitado")
+         
+    # Garantir que expiry seja aware para comparação
+    if expiry.tzinfo is None:
+        expiry = expiry.replace(tzinfo=timezone.utc)
+        
+    if datetime.now(timezone.utc) > expiry:
+         raise HTTPException(status_code=400, detail="Código expirado")
+    
+    hashed_password = get_password_hash(req.new_password)
+    await database.db.users.update_one(
+        {"email": req.email},
+        {"$set": {"hashed_password": hashed_password},
+         "$unset": {"reset_code": "", "reset_code_expiry": ""}}
+    )
+    
+    return {"message": "Senha atualizada com sucesso!"}
+
 @app.get("/auth/me", tags=["Auth"])
 async def get_me(current_user: dict = Depends(get_current_user)):
     return {
@@ -140,12 +266,17 @@ async def get_me(current_user: dict = Depends(get_current_user)):
         "profile_image": current_user.get("profile_image"),
         "total_score": current_user.get("total_score", 0),
         "level": current_user.get("level", 1),
+        "subscription_status": current_user.get("subscription_status", "pending"),
+        "cpf": current_user.get("cpf", ""),
+        "phone": current_user.get("phone", ""),
         "created_at": current_user.get("created_at")
     }
 
 class UpdateProfileRequest(BaseModel):
     full_name: str
     email: str
+    cpf: str = None
+    phone: str = None
 
 @app.patch("/auth/profile", tags=["Auth"])
 async def update_profile(data: UpdateProfileRequest, current_user: dict = Depends(get_current_user)):
@@ -155,13 +286,33 @@ async def update_profile(data: UpdateProfileRequest, current_user: dict = Depend
         if existing:
             raise HTTPException(status_code=400, detail="Este e-mail já está sendo utilizado por outro usuário.")
     
+    update_data = {
+        "full_name": data.full_name,
+        "email": data.email
+    }
+    
+    if data.cpf: update_data["cpf"] = data.cpf
+    if data.phone: update_data["phone"] = data.phone
+    
     await database.db.users.update_one(
         {"_id": ObjectId(current_user["_id"])},
-        {"$set": {
-            "full_name": data.full_name,
-            "email": data.email
-        }}
+        {"$set": update_data}
     )
+    
+    # Se o usuário tiver conta no Asaas, atualiza lá também
+    asaas_id = current_user.get("asaas_customer_id")
+    if asaas_id:
+        try:
+            asaas_payload = {
+                "name": data.full_name,
+                "email": data.email,
+            }
+            if data.cpf: asaas_payload["cpfCnpj"] = data.cpf
+            if data.phone: asaas_payload["mobilePhone"] = data.phone
+            requests.put(f"{payments.ASAAS_API_URL}/customers/{asaas_id}", json=asaas_payload, headers=payments.headers)
+        except Exception as e:
+            print(f"Erro ao atualizar cliente no Asaas: {e}")
+
     return {"message": "Perfil atualizado com sucesso"}
 
 @app.post("/auth/profile/image", tags=["Auth"])
@@ -1012,3 +1163,123 @@ async def get_simulado_history(current_user: dict = Depends(get_current_user)):
             "answered_count": answered_count
         })
     return {"history": out}
+
+class SubscriptionRequest(BaseModel):
+    plan_type: str # mensal ou anual
+    billing_type: str = "UNDEFINED"
+
+@app.post("/payments/subscribe", tags=["Assinatura"])
+async def subscribe(req: SubscriptionRequest, current_user: dict = Depends(get_current_user)):
+    user_id = str(current_user["_id"])
+    
+    # 1. Garantir que o usuário tem um cliente no Asaas
+    asaas_id = current_user.get("asaas_customer_id")
+    if not asaas_id:
+        cpf = current_user.get("cpf", "")
+        phone = current_user.get("phone", "")
+        asaas_id = payments.create_customer(current_user["full_name"], current_user["email"], cpf, phone)
+        if not asaas_id:
+            raise HTTPException(status_code=500, detail="Erro ao criar cliente no gateway de pagamento.")
+        
+        # Salvar o ID no banco
+        await database.db.users.update_one(
+            {"_id": ObjectId(user_id)},
+            {"$set": {"asaas_customer_id": asaas_id}}
+        )
+
+    # 2. Criar a assinatura
+    sub_data = payments.create_subscription(asaas_id, req.plan_type, req.billing_type)
+    if not sub_data:
+        raise HTTPException(status_code=500, detail="Erro ao gerar assinatura.")
+    
+    return sub_data
+
+@app.delete("/payments/subscription/{subscription_id}", tags=["Assinatura"])
+async def cancel_subscription_route(subscription_id: str, current_user: dict = Depends(get_current_user)):
+    # Cancelar no Asaas
+    success = payments.cancel_subscription(subscription_id)
+    if not success:
+        raise HTTPException(status_code=500, detail="Erro ao cancelar assinatura no gateway de pagamento.")
+    
+    # Atualizar no banco
+    await database.db.users.update_one(
+        {"_id": ObjectId(current_user["_id"])},
+        {"$set": {
+            "subscription_status": "canceled",
+            # "subscription_expiry": ... (mantém a data atual se quiser deixar o acesso até o fim)
+        }}
+    )
+    
+    return {"message": "Assinatura cancelada com sucesso. O acesso continuará até o fim do ciclo atual."}
+
+@app.post("/payments/webhook", tags=["Assinatura"])
+async def asaas_webhook(request: Request):
+    # O Asaas envia os dados no corpo da requisição
+    data = await request.json()
+    event = data.get("event")
+    
+    # Log super detalhado para debug
+    print(f"\n=======================================================")
+    print(f"🔔 WEBHOOK ASAAS RECEBIDO: {event}")
+    print(f"📦 DADOS BRUTOS: {data}")
+    print(f"=======================================================\n")
+    
+    # Aceita tanto a confirmação quanto o recebimento
+    if event in ["PAYMENT_CONFIRMED", "PAYMENT_RECEIVED"]:
+        payment = data.get("payment", {})
+        customer_id = payment.get("customer")
+        
+        # Procurar o usuário com este asaas_customer_id
+        user = await database.db.users.find_one({"asaas_customer_id": customer_id})
+        if user:
+            # Ativar assinatura!
+            await database.db.users.update_one(
+                {"_id": user["_id"]},
+                {"$set": {
+                    "subscription_status": "active",
+                    "subscription_expiry": datetime.now(timezone.utc) + timedelta(days=365 if payment.get("value") and payment.get("value") > 500 else 30)
+                }}
+            )
+            print(f"✅✅ Assinatura ativada no Webhook para: {user['email']} ✅✅")
+        else:
+            print(f"❌ Cliente {customer_id} não encontrado no banco.")
+            
+    return {"status": "ok"}
+
+
+@app.get("/payments/history", tags=["Assinatura"])
+async def payment_history(current_user: dict = Depends(get_current_user)):
+    asaas_id = current_user.get("asaas_customer_id")
+    if not asaas_id:
+        return {"subscription": None, "payments": []}
+    
+    # Busca a assinatura ativa
+    sub_url = f"{payments.ASAAS_API_URL}/subscriptions?customer={asaas_id}&status=ACTIVE"
+    sub_res = requests.get(sub_url, headers=payments.headers)
+    sub_data = sub_res.json().get("data", [])
+    subscription = sub_data[0] if sub_data else None
+    
+    # Busca histórico de cobranças
+    pay_url = f"{payments.ASAAS_API_URL}/payments?customer={asaas_id}&limit=10"
+    pay_res = requests.get(pay_url, headers=payments.headers)
+    payments_data = pay_res.json().get("data", [])
+    
+    return {
+        "subscription": subscription,
+        "payments": payments_data
+    }
+
+
+# ROTA APENAS PARA DESENVOLVIMENTO: Simula a ativação
+@app.get("/payments/dev-activate", tags=["Assinatura"])
+async def dev_activate(current_user: dict = Depends(get_current_user)):
+    user_id = ObjectId(current_user["_id"])
+    await database.db.users.update_one(
+        {"_id": user_id},
+        {"$set": {
+            "subscription_status": "active",
+            "subscription_expiry": datetime.now(timezone.utc) + timedelta(days=30)
+        }}
+    )
+    return {"message": "✅ Conta ativada manualmente! Atualize a página inicial."}
+
