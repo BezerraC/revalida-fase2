@@ -35,9 +35,6 @@ const Footer = () => {
               <li>
                 <Link href="/fase2" className="text-sm hover:text-indigo-400 transition-colors">Fase 2 - Prática</Link>
               </li>
-              <li>
-                <Link href="/simulacao" className="text-sm hover:text-indigo-400 transition-colors">Simulados</Link>
-              </li>
             </ul>
           </div>
 
