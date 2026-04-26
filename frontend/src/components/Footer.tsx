@@ -51,13 +51,17 @@ const Footer = () => {
             </ul>
           </div>
 
-          {/* Social and Contact */}
+          {/* Legal */}
           <div>
-            <div className="bg-gray-800/50 p-4 rounded-xl border border-gray-700/50">
-              <p className="text-xs text-gray-400 italic">
-                "A excelência não é um ato, mas um hábito."
-              </p>
-            </div>
+            <h3 className="text-white font-bold text-sm uppercase tracking-wider mb-6">Legal</h3>
+            <ul className="space-y-4">
+              <li>
+                <Link href="/termos" className="text-sm hover:text-indigo-400 transition-colors">Termos de Uso</Link>
+              </li>
+              <li>
+                <Link href="/privacidade" className="text-sm hover:text-indigo-400 transition-colors">Política de Privacidade</Link>
+              </li>
+            </ul>
           </div>
         </div>
 

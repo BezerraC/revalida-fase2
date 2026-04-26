@@ -16,11 +16,11 @@ const MainLayout = ({ children }: MainLayoutProps) => {
   const { user, loading } = useAuth();
   const [isReady, setIsReady] = useState(false);
 
-  const isNoLayoutPath = pathname?.startsWith("/admin") || pathname === "/login" || pathname === "/register" || pathname === "/" || pathname === "/acesso-restrito";
+  const isNoLayoutPath = pathname?.startsWith("/admin") || pathname === "/login" || pathname === "/register" || pathname === "/" || pathname === "/acesso-restrito" || pathname === "/termos" || pathname === "/privacidade";
 
   useEffect(() => {
     if (!loading) {
-      const isPublicPath = pathname === "/" || pathname === "/login" || pathname === "/register" || pathname === "/acesso-restrito";
+      const isPublicPath = pathname === "/" || pathname === "/login" || pathname === "/register" || pathname === "/acesso-restrito" || pathname === "/termos" || pathname === "/privacidade";
       
       if (!user) {
          if (!isPublicPath) {

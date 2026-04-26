@@ -230,6 +230,13 @@ export default function RegisterPage() {
                   </div>
                 </div>
               </div>
+              
+              <p className="text-[10px] text-gray-400 font-medium text-center px-4 leading-relaxed">
+                Ao criar sua conta, você concorda com nossos{" "}
+                <Link href="/termos" className="text-indigo-600 hover:underline">Termos de Uso</Link>{" "}
+                e nossa{" "}
+                <Link href="/privacidade" className="text-indigo-600 hover:underline">Política de Privacidade</Link>.
+              </p>
 
               <button
                 type="submit"

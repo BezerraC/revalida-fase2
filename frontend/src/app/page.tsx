@@ -842,7 +842,13 @@ export default function PricingPage() {
             <span className="text-xl font-black tracking-tight text-gray-900">MedMaster</span>
           </div>
           <div className="flex flex-col md:flex-row items-center gap-6 md:gap-12">
-            <p className="text-sm font-bold text-gray-400">© 2026 MedMaster. Todos os direitos reservados.</p>
+            <div className="flex flex-col items-center md:items-start gap-1">
+              <p className="text-sm font-bold text-gray-400">© 2026 MedMaster. Todos os direitos reservados.</p>
+              <div className="flex items-center gap-4">
+                <Link href="/termos" className="text-[10px] font-black uppercase tracking-widest text-gray-400 hover:text-indigo-600 transition-colors">Termos</Link>
+                <Link href="/privacidade" className="text-[10px] font-black uppercase tracking-widest text-gray-400 hover:text-indigo-600 transition-colors">Privacidade</Link>
+              </div>
+            </div>
             <Link 
               href="https://cbezerra.com" 
               target="_blank" 
