@@ -9,6 +9,7 @@ RUN npm install
 
 # Copy source and build
 COPY . .
+ENV NEXT_PUBLIC_API_URL=https://medmaster.app.br/api
 RUN npm run build
 
 # Stage 2: Running the app
