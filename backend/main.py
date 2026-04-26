@@ -12,7 +12,9 @@ import database
 import gemini_service
 import payments
 import requests
-from models import CaseModel, ChatSessionModel, ChatRequest, ChatTurn, Fase1Request, Fase1ChatRequest, UserRegistration, UserLogin, ForgotPasswordRequest, ResetPasswordRequest
+from google.oauth2 import id_token
+from google.auth.transport import requests as google_requests
+from models import CaseModel, ChatSessionModel, ChatRequest, ChatTurn, Fase1Request, Fase1ChatRequest, UserRegistration, UserLogin, ForgotPasswordRequest, ResetPasswordRequest, GoogleLoginRequest
 from bson import ObjectId
 import random
 import string
@@ -146,6 +148,63 @@ async def login(credentials: UserLogin):
     
     access_token = create_access_token(data={"sub": user["email"]})
     return {"access_token": access_token, "token_type": "bearer"}
+
+@app.post("/auth/google", tags=["Auth"])
+async def google_login(data: GoogleLoginRequest):
+    try:
+        # Se o frontend enviar um access_token (comum em botões customizados)
+        # buscamos os dados do usuário diretamente na API do Google
+        resp = requests.get(f"https://www.googleapis.com/oauth2/v3/userinfo?access_token={data.credential}")
+        
+        if resp.status_code != 200:
+             # Se falhar, tentamos validar como id_token (caso o frontend envie o id_token)
+             try:
+                 client_id = os.getenv("GOOGLE_CLIENT_ID")
+                 id_info = id_token.verify_oauth2_token(data.credential, google_requests.Request(), client_id)
+             except:
+                 raise HTTPException(status_code=401, detail="Token do Google inválido")
+        else:
+             id_info = resp.json()
+        
+        email = id_info.get('email')
+        if not email:
+            raise HTTPException(status_code=400, detail="E-mail não fornecido pelo Google")
+            
+        full_name = id_info.get('name', '')
+        profile_image = id_info.get('picture', '')
+        
+        # Verificar se o usuário já existe
+        user = await database.db.users.find_one({"email": email})
+        
+        if not user:
+            # Criar novo usuário (via Google)
+            user_dict = {
+                "full_name": full_name,
+                "email": email,
+                "cpf": "", # Será preenchido depois no perfil
+                "phone": "",
+                "hashed_password": "", # Login via Google não usa senha local
+                "role": "student",
+                "subscription_status": "pending",
+                "asaas_customer_id": None,
+                "subscription_expiry": None,
+                "profile_image": profile_image,
+                "created_at": datetime.now(timezone.utc)
+            }
+            await database.db.users.insert_one(user_dict)
+            user = await database.db.users.find_one({"email": email})
+        
+        # Gerar token da nossa API
+        access_token = create_access_token(data={"sub": user["email"]})
+        return {"access_token": access_token, "token_type": "bearer"}
+        
+    except ValueError as e:
+        # Token inválido
+        print(f"Erro na validação do token Google: {e}")
+        raise HTTPException(status_code=401, detail="Token do Google inválido")
+    except Exception as e:
+        print(f"Erro interno no Google Login: {e}")
+        raise HTTPException(status_code=500, detail="Erro ao processar login com Google")
 
 def generate_reset_code():
     return ''.join(random.choices(string.digits, k=6))

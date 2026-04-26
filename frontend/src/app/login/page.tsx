@@ -4,6 +4,8 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
 import api from "@/lib/api";
+import toast from "react-hot-toast";
+import { useGoogleLogin } from "@react-oauth/google";
 import { Mail, Lock, ArrowRight, Activity, ChevronLeft, Sparkles } from "lucide-react";
 import Link from "next/link";
 
@@ -85,6 +87,29 @@ export default function LoginPage() {
       setLoading(false);
     }
   };
+
+  const loginWithGoogle = useGoogleLogin({
+    onSuccess: async (tokenResponse) => {
+      setLoading(true);
+      try {
+        const res = await api.post("/auth/google", { 
+          credential: tokenResponse.access_token 
+        });
+        login(res.data.access_token);
+        toast.success("Login realizado com sucesso!", { icon: "👋" });
+      } catch (err: any) {
+        console.error("Erro no Google Login:", err);
+        setError("Erro ao autenticar com Google. Tente novamente.");
+        toast.error("Erro ao autenticar com Google.");
+      } finally {
+        setLoading(false);
+      }
+    },
+    onError: () => {
+      setError("Falha ao iniciar login com Google.");
+      toast.error("Falha no login com Google.");
+    }
+  });
 
   return (
     <div className="min-h-screen bg-white flex flex-col md:flex-row font-sans">
@@ -221,35 +246,26 @@ export default function LoginPage() {
                   <div className="absolute inset-0 flex items-center">
                     <div className="w-full border-t border-gray-100"></div>
                   </div>
-                  <div className="relative flex justify-center text-xs uppercase font-black tracking-widest">
-                    <span className="bg-white px-4 text-gray-400">Ou continue com</span>
+                  <div className="relative flex justify-center text-[10px] uppercase font-black tracking-[0.2em]">
+                    <span className="bg-white px-6 text-gray-400">Ou entre com</span>
                   </div>
                 </div>
 
-                {/* Social Buttons */}
-                <div className="grid grid-cols-2 gap-4">
-                  <button 
-                    type="button"
-                    className="flex items-center justify-center gap-3 py-3 border border-gray-100 rounded-2xl hover:bg-gray-50 transition-all active:scale-95 font-bold text-sm text-gray-700"
-                  >
-                    <svg className="w-5 h-5" viewBox="0 0 24 24">
-                      <path fill="#EA4335" d="M12 5.04c1.94 0 3.51.68 4.75 1.81l3.51-3.51C18.1 1.42 15.35 0 12 0 7.31 0 3.25 2.69 1.25 6.63l4.1 3.18C6.3 7.31 8.97 5.04 12 5.04z"/>
-                      <path fill="#4285F4" d="M23.49 12.27c0-.8-.07-1.56-.19-2.27H12v4.51h6.47c-.28 1.48-1.11 2.73-2.36 3.58l4.1 3.18c2.4-2.21 3.78-5.46 3.78-9z"/>
-                      <path fill="#FBBC05" d="M5.35 14.31c-.13-.38-.2-.78-.2-1.19s.07-.81.2-1.19L1.25 8.75C.45 10.33 0 12.11 0 14c0 1.89.45 3.67 1.25 5.25l4.1-3.18z"/>
-                      <path fill="#34A853" d="M12 24c3.24 0 5.95-1.08 7.93-2.91l-4.1-3.18c-1.1.74-2.51 1.18-3.83 1.18-3.03 0-5.7-2.27-6.61-5.31l-4.1 3.18C3.25 21.31 7.31 24 12 24z"/>
-                    </svg>
-                    Google
-                  </button>
-                  <button 
-                    type="button"
-                    className="flex items-center justify-center gap-3 py-3 border border-gray-100 rounded-2xl hover:bg-gray-50 transition-all active:scale-95 font-bold text-sm text-gray-700"
-                  >
-                    <svg className="w-5 h-5" viewBox="0 0 24 24" fill="#1877F2">
-                      <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/>
-                    </svg>
-                    Facebook
-                  </button>
-                </div>
+                {/* Social Button - Google Only */}
+                <button 
+                  type="button"
+                  disabled={loading}
+                  onClick={() => loginWithGoogle()}
+                  className="w-full flex items-center justify-center gap-4 py-4 border border-gray-200 rounded-2xl hover:bg-gray-50 transition-all active:scale-[0.98] font-black text-sm text-gray-700 shadow-sm disabled:opacity-50"
+                >
+                  <svg className="w-6 h-6" viewBox="0 0 24 24">
+                    <path fill="#EA4335" d="M12 5.04c1.94 0 3.51.68 4.75 1.81l3.51-3.51C18.1 1.42 15.35 0 12 0 7.31 0 3.25 2.69 1.25 6.63l4.1 3.18C6.3 7.31 8.97 5.04 12 5.04z"/>
+                    <path fill="#4285F4" d="M23.49 12.27c0-.8-.07-1.56-.19-2.27H12v4.51h6.47c-.28 1.48-1.11 2.73-2.36 3.58l4.1 3.18c2.4-2.21 3.78-5.46 3.78-9z"/>
+                    <path fill="#FBBC05" d="M5.35 14.31c-.13-.38-.2-.78-.2-1.19s.07-.81.2-1.19L1.25 8.75C.45 10.33 0 12.11 0 14c0 1.89.45 3.67 1.25 5.25l4.1-3.18z"/>
+                    <path fill="#34A853" d="M12 24c3.24 0 5.95-1.08 7.93-2.91l-4.1-3.18c-1.1.74-2.51 1.18-3.83 1.18-3.03 0-5.7-2.27-6.61-5.31l-4.1 3.18C3.25 21.31 7.31 24 12 24z"/>
+                  </svg>
+                  Continuar com Google
+                </button>
               </form>
             )}
 

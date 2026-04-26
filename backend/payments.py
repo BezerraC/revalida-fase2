@@ -59,6 +59,7 @@ def create_subscription(customer_id, plan_type, billing_type="UNDEFINED"):
         "nextDueDate": (datetime.now() + timedelta(days=1)).strftime("%Y-%m-%d"),
         "cycle": cycle,
         "description": f"Assinatura MedMaster - Plano {plan_type.capitalize()}",
+        "postalService": False
     }
     
     try:

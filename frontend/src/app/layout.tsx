@@ -20,6 +20,9 @@ export const metadata: Metadata = {
 import { AuthProvider } from "@/context/AuthContext";
 import MainLayout from "@/components/MainLayout";
 import { Toaster } from "react-hot-toast";
+import { GoogleOAuthProvider } from "@react-oauth/google";
+
+const GOOGLE_CLIENT_ID = "381685213572-8632pqeq0h5slq0072n3ev58aoefpor1.apps.googleusercontent.com";
 
 export default function RootLayout({
   children,
@@ -28,17 +31,19 @@ export default function RootLayout({
 }>) {
   return (
     <AuthProvider>
-      <html
-        lang="pt-BR"
-        className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
-      >
-        <body className="min-h-full flex flex-col bg-gray-50">
-          <Toaster position="top-right" toastOptions={{ className: 'font-bold font-sans' }} />
-          <MainLayout>
-            {children}
-          </MainLayout>
-        </body>
-      </html>
+      <GoogleOAuthProvider clientId={GOOGLE_CLIENT_ID}>
+        <html
+          lang="pt-BR"
+          className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
+        >
+          <body className="min-h-full flex flex-col bg-gray-50">
+            <Toaster position="top-right" toastOptions={{ className: 'font-bold font-sans' }} />
+            <MainLayout>
+              {children}
+            </MainLayout>
+          </body>
+        </html>
+      </GoogleOAuthProvider>
     </AuthProvider>
   );
 }
