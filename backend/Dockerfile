@@ -1,5 +1,5 @@
 # Use the official Python image with 3.11 for better compatibility with networkx 3.6
-FROM python:3.11-slim
+FROM python:3.14.2-slim
 
 # Set environment variables
 ENV PYTHONDONTWRITEBYTECODE 1
